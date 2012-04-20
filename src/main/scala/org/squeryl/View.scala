@@ -15,6 +15,7 @@
  ***************************************************************************** */
 package org.squeryl
 
+import dsl.ast.ViewExpressionNode
 import dsl.QueryDsl
 import internals._
 import java.sql.ResultSet
@@ -119,5 +120,6 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
    */
   def get[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl): T = 
      lookup(k).getOrElse(Utils.throwError("Found no row with key '"+ k + "' in " + name + "."))
-  
+
+  def viewExpressionNode: ViewExpressionNode[T] = new ViewExpressionNode[T](this)
 }
