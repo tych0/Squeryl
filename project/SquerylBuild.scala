@@ -2,6 +2,12 @@ import sbt._
 import Keys._
 import ls.Plugin._
 
+object Resolvers {
+  val ccapRepo = "CCAP Repository" at "http://artifactory.ci.wicourts.gov/repo"
+  val ccapReleases = "CCAP Releases" at "http://artifactory.ci.wicourts.gov/libs-releases-local"
+  val ccapSnapshots = "CCAP Snapshots" at "http://artifactory.ci.wicourts.gov/libs-snapshots-local"
+}
+
 object SquerylBuild extends Build {
   
   lazy val squeryl = Project(
@@ -9,7 +15,7 @@ object SquerylBuild extends Build {
       base = file("."),
       settings = Project.defaultSettings ++ lsSettings ++ Seq(
     		  description := "A Scala ORM and DSL for talking with Databases using minimum verbosity and maximum type safety",
-    		  organization := "org.squeryl",
+    		  organization := "gov.wicourts.org.squeryl",
     		  version := "0.9.5",
     		  version <<= version { v => //only release *if* -Drelease=true is passed to JVM
     		  	val release = Option(System.getProperty("release")) == Some("true")
@@ -24,7 +30,7 @@ object SquerylBuild extends Build {
   			  },
     		  parallelExecution := false,
     		  publishMavenStyle := true,
-  			  scalaVersion := "2.9.2",
+  			  scalaVersion := "2.9.1",
   			  crossScalaVersions := Seq("2.9.2", "2.9.1", "2.9.0-1", "2.9.0", "2.8.1", "2.8.0"),
   			  licenses := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
   			  homepage := Some(url("http://squeryl.org")),
@@ -44,6 +50,7 @@ object SquerylBuild extends Build {
 			  					<url>https://github.com/davewhittaker</url>
 			  				</developer>
 			  			  </developers>),
+                  /*
     		  publishTo <<= version { v => //add credentials to ~/.sbt/sonatype.sbt
     		  	val nexus = "https://oss.sonatype.org/"
 				if (v.trim.endsWith("SNAPSHOT")) 
@@ -51,6 +58,16 @@ object SquerylBuild extends Build {
 				 else
 				   Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 			  },
+                          */
+        publishTo <<= (version) { version: String =>
+          val repo =
+            if (version.trim.endsWith("SNAPSHOT"))
+              Resolvers.ccapSnapshots
+            else
+              Resolvers.ccapReleases
+            Some(repo)
+        },
+        credentials += Credentials(Path.userHome / ".ccap_artifactory_credentials"),
 			  publishArtifact in Test := false,
 			  pomIncludeRepository := { _ => false },
 			  //below is for lsync, run "ls-write-version", commit to github, then run "lsync" 
