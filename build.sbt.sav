@@ -1,9 +1,9 @@
 
 name := "squeryl"
 
-organization := "org.squeryl"
+organization := "gov.wicourts.org.squeryl"
 
-version := "0.9.5-extended-types-poc2"
+version := "0.9.5-extended-types-poc2-ccap"
 
 version <<= version { v => 
   val snapshot = Option(System.getProperty("snapshot")) == Some("true")
