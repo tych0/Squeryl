@@ -220,7 +220,7 @@ abstract class AbstractQuery[R](val isRoot:Boolean) extends Query[R] {
   protected def createSubQueryable[U](q: Queryable[U]): SubQueryable[U] =
     if(q.isInstanceOf[View[_]]) {
       val v = q.asInstanceOf[View[U]]
-      val vxn = new ViewExpressionNode(v)
+      val vxn = v.viewExpressionNode
       vxn.sample =
         v.posoMetaData.createSample(FieldReferenceLinker.createCallBack(vxn))
       
