@@ -252,6 +252,8 @@ trait DatabaseAdapter {
 
   def supportsAutoIncrementInColumnDeclaration:Boolean = true
 
+  def supportsReturningClause = false
+
   def writeCreateTable[T](t: Table[T], sw: StatementWriter, schema: Schema) = {
 
     sw.write("create table ")
@@ -372,9 +374,9 @@ trait DatabaseAdapter {
     }
   }
 
-  def executeUpdateForInsert(s: Session, sw: StatementWriter, ps: PreparedStatement) = exec(s, sw) { params =>
+  def executeUpdateForInsert[T](s: Session, sw: StatementWriter, ps: PreparedStatement): Boolean = exec(s, sw) { params =>
     fillParamsInto(params, ps)
-    ps.executeUpdate
+    ps.execute()
   }
 
   protected def getInsertableFields(fmd : Iterable[FieldMetaData]) = fmd.filter(fmd => !fmd.isAutoIncremented && fmd.isInsertable )
@@ -392,7 +394,22 @@ trait DatabaseAdapter {
     sw.write(
       f.map(fmd => writeValue(o_, fmd, sw)
     ).mkString("(",",",")"));
+
+    writeReturningClause(t, sw)
   }
+
+  protected def writeReturningClause[T](t: Table[T], sw: StatementWriter) {
+    if (supportsReturningClause) {
+      val f = t.posoMetaData.triggerManagedFields.toList
+
+      f.headOption foreach { _ =>
+        sw.write(" returning ")
+        sw.write(f.map(fmd => quoteName(fmd.columnName)).mkString("(", ", ", ")"));
+      }
+    }
+  }
+
+
 
   /**
    * Converts field instances so they can be fed, and understood by JDBC

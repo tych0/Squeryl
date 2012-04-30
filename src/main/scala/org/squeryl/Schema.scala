@@ -508,6 +508,8 @@ trait Schema {
   
   protected def named(name: String) = Named(name)
 
+  protected def triggerManaged = TriggerManaged
+
   class ColGroupDeclaration(cols: Seq[FieldMetaData]) {
 
     def are(columnAttributes: AttributeValidOnMultipleColumn*) =

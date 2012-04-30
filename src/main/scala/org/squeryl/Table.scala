@@ -33,6 +33,9 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
   private def _dbAdapter = Session.currentSession.databaseAdapter
 
+  private def hasTriggerManagedFields: Boolean =
+    _dbAdapter.supportsReturningClause && posoMetaData.triggerManagedFields.headOption.isDefined
+
   def insert(t: T): T = StackMarker.lastSquerylStackFrame {
 
     val o = _callbacks.beforeInsert(t.asInstanceOf[AnyRef])
@@ -52,9 +55,32 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
       }        
 
     try {
-      val cnt = _dbAdapter.executeUpdateForInsert(sess, sw, st)
+      val executeResult = _dbAdapter.executeUpdateForInsert(sess, sw, st)
 
-      if(cnt != 1)
+      if (executeResult) {
+        if (hasTriggerManagedFields) {
+          val rs = st.getResultSet
+          try {
+            if (! rs.next())
+                internals.Utils.throwError("Expected data")
+            for {
+              (fmd, index) <- posoMetaData.triggerManagedFields.zipWithIndex
+            } {
+              fmd.setFromResultSet(o, rs, index+1)
+            }
+          } finally {
+            rs.close()
+          }
+          st.getMoreResults()
+        } else {
+          internals.Utils.throwError("Unexpected result set")
+        }
+      }
+
+      val cnt = st.getUpdateCount
+
+      //if (cnt != 1)
+      if (cnt != 1 && ! hasTriggerManagedFields) // Work around PG JDBC bug
         org.squeryl.internals.Utils.throwError("failed to insert")
 
       posoMetaData.primaryKey match {
@@ -71,7 +97,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
             rs.close
           }
         }
-        case a:Any =>{}
+        case _ =>
       }
     }
     finally {
