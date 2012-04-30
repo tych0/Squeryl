@@ -489,7 +489,7 @@ trait DatabaseAdapter {
     sw.write("where")
     sw.nextLine
     sw.indent
-    
+
     t.posoMetaData.primaryKey.getOrElse(org.squeryl.internals.Utils.throwError("writeUpdate was called on an object that does not extend from KeyedEntity[]")).fold(
       pkMd => sw.write(quoteName(pkMd.columnName), " = ", writeValue(o_, pkMd, sw)),
       pkGetter => {
@@ -562,18 +562,18 @@ trait DatabaseAdapter {
       if(!z.isLast) {
         sw.write(",")
         sw.nextLine
-      }      
+      }
     }
 
     if(t.posoMetaData.isOptimistic) {
       sw.write(",")
-      sw.nextLine      
+      sw.nextLine
       val occ = t.posoMetaData.optimisticCounter.get
       sw.write(quoteName(occ.columnName))
       sw.write(" = ")
       sw.write(quoteName(occ.columnName) + " + 1")
     }
-    
+
     sw.unindent
 
     if(us.whereClause != None) {
