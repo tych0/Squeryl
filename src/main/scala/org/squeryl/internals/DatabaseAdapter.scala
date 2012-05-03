@@ -400,7 +400,7 @@ trait DatabaseAdapter {
 
   protected def writeReturningClause[T](t: Table[T], sw: StatementWriter) {
     if (supportsReturningClause) {
-      val f = t.posoMetaData.triggerManagedFields.toList
+      val f = t.posoMetaData.dbManagedFields.toList
 
       f.headOption foreach { _ =>
         sw.write(" returning ")

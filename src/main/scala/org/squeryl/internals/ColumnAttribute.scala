@@ -69,6 +69,6 @@ case class Named(name: String) extends ColumnAttribute
         with AttributeValidOnNumericalColumn
         with AttributeValidOnNonNumericalColumn
 
-case object TriggerManaged extends ColumnAttribute
+case object DbManaged extends ColumnAttribute
         with AttributeValidOnNumericalColumn
         with AttributeValidOnNonNumericalColumn

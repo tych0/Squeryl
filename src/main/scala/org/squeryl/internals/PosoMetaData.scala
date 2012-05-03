@@ -322,9 +322,9 @@ class PosoMetaData[T](val clasz: Class[T], val schema: Schema, val viewOrTable: 
       _fillWithMembers(c, members)
   }
 
-  def triggerManagedFields: Iterable[FieldMetaData] =
+  def dbManagedFields: Iterable[FieldMetaData] =
     for {
-      m <- fieldsMetaData if m.isTriggerManaged
+      m <- fieldsMetaData if m.isDbManaged
     } yield m
 }
 

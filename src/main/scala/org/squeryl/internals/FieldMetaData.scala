@@ -249,16 +249,16 @@ class FieldMetaData(
    * Inserts will only set values for a column if isInsertable is true
    */
   def isInsertable =
-    !columnAttributes.exists(a => a.isInstanceOf[Uninsertable]) && !isTriggerManaged
+    !columnAttributes.exists(a => a.isInstanceOf[Uninsertable]) && !isDbManaged
 
   /**
    * Updates will only set values for a column if isUpdatable is true
    */
   def isUpdatable =
-    !columnAttributes.exists(_.isInstanceOf[Unupdatable]) && !isTriggerManaged
+    !columnAttributes.exists(_.isInstanceOf[Unupdatable]) && !isDbManaged
 
-  def isTriggerManaged =
-    columnAttributes.exists(_ == TriggerManaged)
+  def isDbManaged =
+    columnAttributes.exists(_ == DbManaged)
 
 
 

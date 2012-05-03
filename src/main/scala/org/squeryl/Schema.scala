@@ -508,7 +508,7 @@ trait Schema {
   
   protected def named(name: String) = Named(name)
 
-  protected def triggerManaged = TriggerManaged
+  protected def dbManaged = DbManaged
 
   class ColGroupDeclaration(cols: Seq[FieldMetaData]) {
 
