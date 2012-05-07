@@ -17,6 +17,7 @@ package org.squeryl.adapters
 
 import org.squeryl.{Session, Table}
 import org.squeryl.dsl.ast._
+import org.squeryl.dsl._
 import java.sql.SQLException
 import collection.Set
 import collection.immutable.List
@@ -98,7 +99,7 @@ class OracleAdapter extends DatabaseAdapter {
     sw.write(colVals.mkString("(",",",")"));
   }
 
-  override def writeConcatFunctionCall(fn: FunctionNode[_], sw: StatementWriter) =
+  override def writeConcatFunctionCall(fn: FunctionNode, sw: StatementWriter) =
     sw.writeNodesWithSeparator(fn.args, " || ", false)
 
   override def writeJoin(queryableExpressionNode: QueryableExpressionNode, sw: StatementWriter) = {
@@ -229,8 +230,8 @@ class OracleAdapter extends DatabaseAdapter {
 
   override def viewAlias(vn: ViewExpressionNode[_]) =
     "t" + vn.uniqueId.get
-    
-  override def writeCastInvocation(e: TypedExpressionNode[_], sw: StatementWriter) = {
+/*    
+  override def writeCastInvocation(e: TypedExpression[_,_], sw: StatementWriter) = {
     sw.write("cast(")
     e.write(sw)
 
@@ -245,7 +246,7 @@ class OracleAdapter extends DatabaseAdapter {
       
     sw.write(")")
   }
-    
+*/    
 }
 
 

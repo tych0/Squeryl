@@ -26,8 +26,6 @@ import java.sql.ResultSet
  */
 class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Class[T], schema: Schema, _prefix: Option[String]) extends Queryable[T] {
 
-  def this(n:String)(implicit manifestT: Manifest[T]) =
-    this(n, manifestT.erasure.asInstanceOf[Class[T]], DummySchema, None)
 
 //2.9.x approach for LyfeCycle events :
 //  private [squeryl] var _callbacks: PosoLifecycleEventListener = NoOpPosoLifecycleEventListener
@@ -121,5 +119,13 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
   def get[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl): T = 
      lookup(k).getOrElse(Utils.throwError("Found no row with key '"+ k + "' in " + name + "."))
 
+
   def viewExpressionNode: ViewExpressionNode[T] = new ViewExpressionNode[T](this)
+
+  
+  def allRows(implicit dsl: QueryDsl): Iterable[T] = {
+    import dsl._
+    dsl.queryToIterable(from(this)(a=> select(a)))
+  }
+
 }

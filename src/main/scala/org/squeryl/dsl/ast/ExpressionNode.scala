@@ -93,10 +93,10 @@ trait ExpressionNode {
   }
 
   def ? : this.type = {
-    if(! this.isInstanceOf[ConstantExpressionNode[_]])
+    if(! this.isInstanceOf[ConstantTypedExpression[_,_]])
       org.squeryl.internals.Utils.throwError("the '?' operator (shorthand for 'p.inhibitWhen(p == None))' can only be used on a constant query argument")
 
-    val c = this.asInstanceOf[ConstantExpressionNode[_]]
+    val c = this.asInstanceOf[ConstantTypedExpression[_,_]]
 
     inhibitWhen(c.value == None)
   }
@@ -110,11 +110,11 @@ trait ListExpressionNode extends ExpressionNode {
   def isEmpty: Boolean
 }
 
-class EqualityExpression(override val left: TypedExpressionNode[_], override val right: TypedExpressionNode[_]) extends BinaryOperatorNodeLogicalBoolean(left, right, "=") {
+class EqualityExpression(override val left: TypedExpression[_,_], override val right: TypedExpression[_,_]) extends BinaryOperatorNodeLogicalBoolean(left, right, "=") {
   
   override def doWrite(sw: StatementWriter) =     
     right match {
-      case c: ConstantExpressionNode[_] => 
+      case c: ConstantTypedExpression[_,_] => 
         if(c.value == None) {
           left.write(sw)
           sw.write(" is null")
@@ -189,7 +189,7 @@ class BetweenExpression(first: ExpressionNode, second: ExpressionNode, third: Ex
 }
 
 class TernaryOperatorNode(val first: ExpressionNode, val second: ExpressionNode, val third: ExpressionNode, op: String)
-  extends FunctionNode(op, None, List(first, second, third)) with LogicalBoolean {
+  extends FunctionNode(op, Seq(first, second, third)) with LogicalBoolean {
 
   override def inhibited =
     _inhibitedByWhen || first.inhibited || second.inhibited || third.inhibited
@@ -265,7 +265,7 @@ class ColumnAttributeAssignment(val left: FieldMetaData, val columnAttributes: S
   def isIdFieldOfKeyedEntity = left.isIdFieldOfKeyedEntity 
 }
 
-class DefaultValueAssignment(val left: FieldMetaData, val value: TypedExpressionNode[_])
+class DefaultValueAssignment(val left: FieldMetaData, val value: TypedExpression[_,_])
   extends BaseColumnAttributeAssignment {
 
   def isIdFieldOfKeyedEntity = left.isIdFieldOfKeyedEntity
@@ -276,63 +276,16 @@ class DefaultValueAssignment(val left: FieldMetaData, val value: TypedExpression
 }
 
 
-trait TypedExpressionNode[T] extends ExpressionNode {
-
-  def sample:T = mapper.sample
-
-  def mapper: OutMapper[T]
-
-  def :=[B <% TypedExpressionNode[T]] (b: B) =
-    new UpdateAssignment(_fieldMetaData, b : TypedExpressionNode[T])
-
-  def :=(q: Query[Measures[T]]) =
-    new UpdateAssignment(_fieldMetaData, q.ast)
-
-  def defaultsTo[B <% TypedExpressionNode[T]](value: B) /*(implicit restrictUsageWithinSchema: Schema) */ =
-    new DefaultValueAssignment(_fieldMetaData, value : TypedExpressionNode[T])
-
-  /**
-   * TODO: make safer with compiler plugin
-   * Not type safe ! a TypedExpressionNode[T] might not be a SelectElementReference[_] that refers to a FieldSelectElement...   
-   */
-  private [squeryl] def _fieldMetaData = {
-    val ser =
-      try {
-        this.asInstanceOf[SelectElementReference[_]]
-      }
-      catch { // TODO: validate this at compile time with a scalac plugin
-        case e:ClassCastException => {
-            throw new RuntimeException("left side of assignment '" + Utils.failSafeString(this.toString)+ "' is invalid, make sure statement uses *only* closure argument.", e)
-        }
-      }
-
-    val fmd =
-      try {
-        ser.selectElement.asInstanceOf[FieldSelectElement].fieldMetaData
-      }
-      catch { // TODO: validate this at compile time with a scalac plugin
-        case e:ClassCastException => {
-          throw new RuntimeException("left side of assignment '" + Utils.failSafeString(this.toString)+ "' is invalid, make sure statement uses *only* closure argument.", e)
-        }
-      }
-    fmd
-  }
-}
-
 class TokenExpressionNode(val token: String) extends ExpressionNode {
   def doWrite(sw: StatementWriter) = sw.write(token)
 }
 
 
-class InputOnlyConstantExpressionNode[T](v: T) extends ConstantExpressionNode[T](v, None : Option[OutMapper[T]]) with TypedExpressionNode[T]
+class InputOnlyConstantExpressionNode(v: Any) extends ConstantTypedExpression[Any,Any](v, NoOpOutMapper, v.asInstanceOf[AnyRef])
 
-class ConstantExpressionNode[T] (val value: T, _mapper: Option[OutMapper[T]]) extends ExpressionNode {
-
-  def this(v: T)(implicit m: OutMapper[T]) = this(v,Some(m))
+class ConstantTypedExpression[A1,T1](val value: A1, override val mapper: OutMapper[A1], nativeJdbcValue: AnyRef) extends TypedExpression[A1,T1] {
 
   private def needsQuote = value.isInstanceOf[String]
-
-  def mapper = _mapper.getOrElse(Utils.throwError("No OutMapper !"))
 
   def doWrite(sw: StatementWriter) = {
     if(sw.isForDisplay) {
@@ -348,10 +301,10 @@ class ConstantExpressionNode[T] (val value: T, _mapper: Option[OutMapper[T]]) ex
     }
     else {
       sw.write("?")
-      sw.addParam(value.asInstanceOf[AnyRef])
+      sw.addParam(nativeJdbcValue)
     }
   }
-  override def toString = 'ConstantExpressionNode + ":" + value
+  override def toString = 'ConstantTypedExpression + ":" + value
 }
 
 class ConstantExpressionNodeList[T](val value: Traversable[T]) extends ExpressionNode {
@@ -368,12 +321,8 @@ class ConstantExpressionNodeList[T](val value: Traversable[T]) extends Expressio
     }
 }
 
-class FunctionNode[A](val name: String, _mapper : Option[OutMapper[A]], val args: Iterable[ExpressionNode]) extends ExpressionNode {
-
-  def this(name: String, args: ExpressionNode*) = this(name, None, args)
-
-  def mapper: OutMapper[A] = _mapper.getOrElse(org.squeryl.internals.Utils.throwError("no mapper available"))
-
+class FunctionNode(val name: String, val args: Seq[ExpressionNode]) extends ExpressionNode {
+        
   def doWrite(sw: StatementWriter) = {
 
     sw.write(name)
@@ -611,7 +560,7 @@ trait NestedExpression {
     visitDescendants( (node, parent, depth) =>
       node match {
         case e:ExportedSelectElement if e.needsOuterScope => e.outerScopes = query :: e.outerScopes
-        case s:SelectElementReference[_] => s.delegateAtUseSite match {
+        case s:SelectElementReference[_,_] => s.delegateAtUseSite match {
           case e:ExportedSelectElement if e.needsOuterScope => e.outerScopes = query :: e.outerScopes
           case _ =>
         }

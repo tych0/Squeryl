@@ -22,13 +22,13 @@ import java.util.Date
 import java.text.SimpleDateFormat
 import org.squeryl.dsl.{GroupWithMeasures}
 import org.squeryl.dsl._
-import ast.TypedExpressionNode
 import org.squeryl._
 import adapters.{MSSQLServer, PostgreSqlAdapter, OracleAdapter, MySQLAdapter, DerbyAdapter}
 import internals.{FieldMetaData, FieldReferenceLinker}
 import org.scalatest.Suite
 import collection.mutable.ArrayBuffer
 import org.squeryl.internals.StatementWriter
+import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.dsl.ast.ExpressionNode
 
 
@@ -271,74 +271,6 @@ class TestInstance(schema : SchoolDb){
   val tournesol = professors.insert(new Professor("tournesol", 80.0F, Some(70.5F), 80.0F, Some(70.5F)))
 }
 
-
-abstract class TypeSystemExerciseTests extends SchoolDbTestBase{
-
-  import org.squeryl.PrimitiveTypeMode._
-  import schema._
-
-  test("exerciseTypeSystem1") {
-    val testInstance = sharedTestInstance; import testInstance._
-     val q =
-      from(professors, courseAssigments, students, courses, courseSubscriptions, addresses)(
-       (p, ca, s, c, cs, a) =>
-        where(
-         p.id === ca.professorId and
-         ca.courseId === c.id and
-         cs.studentId === s.id and
-         cs.courseId === c.id and
-         s.addressId === a.id
-        )
-        groupBy(
-          s.isMultilingual : TypedExpressionNode[Option[Boolean]],
-          p.yearlySalary : TypedExpressionNode[Float],
-          p.weight :  TypedExpressionNode[Option[Float]],
-          a.appNumberSuffix : TypedExpressionNode[Option[String]],
-          c.finalExamDate : TypedExpressionNode[Option[Date]],
-          a.appNumber : TypedExpressionNode[Option[Int]],
-          c.meaninglessLongOption : TypedExpressionNode[Option[Long]],
-          c.meaninglessLongOption / (s.addressId+1) : TypedExpressionNode[Option[Double]] // TODO: fix NOT A GROUP BY exception ....
-        )
-        compute(
-          min(p.id) : TypedExpressionNode[Option[Long]],
-          avg(ca.id) : TypedExpressionNode[Option[Float]],
-          avg(c.meaninglessLongOption) : TypedExpressionNode[Option[Double]],
-          max(c.finalExamDate) : TypedExpressionNode[Option[Date]],
-          min(a.numberSuffix) : TypedExpressionNode[Option[String]],
-          max(s.isMultilingual) : TypedExpressionNode[Option[Boolean]],
-          min(c.startDate)  : TypedExpressionNode[Option[Date]]
-        )
-      )
-
-    try {
-       q.single : GroupWithMeasures[
-       Product8[Option[Boolean],
-        Float,
-        Option[Float],
-        Option[String],
-        Option[Date],
-        Option[Int],
-        Option[Long],
-        Option[Double]],
-       Product7[Option[Long],
-        Option[Float],
-        Option[Double],
-        Option[Date],
-        Option[String],
-        Option[Boolean],
-        Option[Date]]
-      ]
-      passed('exerciseTypeSystem1)
-    }
-    catch {
-      case e:Exception => {
-        println("statement failed : \n" + q.statement)
-        throw e
-      }
-    }
-  }
-}
-
 abstract class FullOuterJoinTests extends SchoolDbTestBase{
 
   import org.squeryl.PrimitiveTypeMode._
@@ -436,7 +368,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
   def addressesOfStudentsOlderThan24 =
     from(students, addresses)((s,a) =>
-      where((24 : NumericalExpression[Int]) < s.age and (24 lt s.age))
+      where((24 lt s.age) and (24 lt s.age))
       select(&(a.numberz || " " || a.streetName || " " || a.appNumber))
     )
 
@@ -573,7 +505,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     assert(beforeInsertsOfProfessor.exists(_ == s3))
     assert(afterInsertsOfProfessor.exists(_ == s3))
 
-    assert(professors.map(System.identityHashCode(_)).toSet == professorsCreatedWithFactory.toSet)
+    assert(professors.allRows.map(System.identityHashCode(_)).toSet == professorsCreatedWithFactory.toSet)
   }
 
 
@@ -644,12 +576,13 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
   }
   
     
-  test("isNull and === None comparison", SingleTestRun){  
+  test("isNull and === None comparison"){  
     val z1 =
       from(students)(s=>
         where({
-          s.isMultilingual === None          
-          })
+          //TODO: REFACTOR Z
+          s.isMultilingual === (None :Option[Boolean])
+        })
         select(s.id)
       )
     
@@ -796,7 +729,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     val result1 =
       from(courses)(c=>
-        where(c.finalExamDate >= Some(jan2008) and c.finalExamDate.isNotNull)
+        where(c.finalExamDate >= Option(jan2008) and c.finalExamDate.isNotNull)
         select(c)
         orderBy(c.finalExamDate, c.id asc)
       ).toList.map(c=>c.id)
@@ -990,7 +923,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
 
 
-  test("PartialUpdate1") {
+  test("PartialUpdate1", SingleTestRun) {
     val testInstance = sharedTestInstance; import testInstance._
 
     val initialHT = courses.where(c => c.id === heatTransfer.id).single
@@ -1076,8 +1009,6 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
       )
     q.toList
 
-
-    println(q.statement)
     assert(q.statement.indexOf("Having") != -1)
   }
 
@@ -1268,7 +1199,6 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
         compute(min(s2.age))
       )
 
-
     val q2 = (z0 : Query[Measures[Option[Int]]] ):  Query[Option[Int]]
 
     val q3 =
@@ -1292,7 +1222,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
         select(s)
       )
 
-    val allStuents = students.map(_.id).toSet
+    val allStuents = students.allRows.map(_.id).toSet
     val allStudentsQ = q.map(_.id).toSet
 
     assertEquals(allStuents, allStudentsQ, 'testIsNotNullWithInhibition)
@@ -1359,7 +1289,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     val testInstance = sharedTestInstance; import testInstance._
     // this should not blow up :
     val q = students.where(_.dummyKey === (None: Option[Int], None: Option[Int]))
-    println(q.statement)
+
     q.toList
   }
 
@@ -1394,7 +1324,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
   test("Boolean2LogicalBooleanConversion") {
     val testInstance = sharedTestInstance; import testInstance._
 
-    val multilingualStudents = students.where(_.isMultilingual === Some(true)).map(_.id).toSet
+    val multilingualStudents = students.where(_.isMultilingual === Option(true)).map(_.id).toSet
 
     //println(multilingualStudents)
     //List(Student:1:Xiao, Student:4:Gontran, Student:5:Gaitan)
@@ -1418,11 +1348,11 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
       )
 
 
-    val expectedAvgSal_ = professors.map(_.yearlySalaryBD.doubleValue)
+    val expectedAvgSal_ = professors.allRows.map(_.yearlySalaryBD.doubleValue)
 
     val expectedAvgSal = expectedAvgSal_.sum / expectedAvgSal_.size
 
-    val expectedAvgWeight_ = professors.map(_.weightInBD).filter(_ != None).map(_.get)
+    val expectedAvgWeight_ = professors.allRows.map(_.weightInBD).filter(_ != None).map(_.get)
 
     val expectedAvgWeight = expectedAvgWeight_.sum / expectedAvgWeight_.size
 

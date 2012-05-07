@@ -16,6 +16,7 @@
 package org.squeryl.internals
 
 import org.squeryl.dsl.ast._
+import org.squeryl.dsl._
 import org.squeryl._
 import dsl.CompositeKey
 import org.squeryl.{Schema, Session, Table}
@@ -180,28 +181,17 @@ trait DatabaseAdapter {
   def timestampTypeDeclaration = "timestamp"
   def binaryTypeDeclaration = "binary"
   def uuidTypeDeclaration = "char(36)"
-
+/*
   private val _declarationHandler = new FieldTypeHandler[String] {
 
     def handleIntType = intTypeDeclaration
     def handleStringType  = stringTypeDeclaration
-    def handleStringType(fmd: Option[FieldMetaData]) =
-      fmd match {
-        case Some(x) => stringTypeDeclaration(x.length)
-        case None => stringTypeDeclaration
-      }
-
     def handleBooleanType = booleanTypeDeclaration
     def handleDoubleType = doubleTypeDeclaration
     def handleDateType = dateTypeDeclaration
     def handleLongType = longTypeDeclaration
     def handleFloatType = floatTypeDeclaration
-    def handleBigDecimalType(fmd: Option[FieldMetaData]) =
-      fmd match {
-        case Some(x) => bigDecimalTypeDeclaration(x.length, x.scale)
-        case None => bigDecimalTypeDeclaration
-      }
-
+    def handleBigDecimalType = bigDecimalTypeDeclaration
     def handleTimestampType = timestampTypeDeclaration
     def handleBinaryType = binaryTypeDeclaration
     def handleUuidType = uuidTypeDeclaration
@@ -209,12 +199,19 @@ trait DatabaseAdapter {
     def handleUnknownType(c: Class[_]) =
       org.squeryl.internals.Utils.throwError("don't know how to map field type " + c.getName)
   }
-  
-  def databaseTypeFor(fmd: FieldMetaData) =
+*/  
+  def databaseTypeFor(fmd: FieldMetaData):String =
     fmd.explicitDbTypeDeclaration.getOrElse(
-      fmd.schema.columnTypeFor(fmd, fmd.parentMetaData.viewOrTable.asInstanceOf[Table[_]]).getOrElse(
-        _declarationHandler.handleType(fmd.wrappedFieldType, Some(fmd))
-      )
+      fmd.schema.columnTypeFor(fmd, fmd.parentMetaData.viewOrTable.asInstanceOf[Table[_]]).getOrElse {
+        val nativeJdbcType = fmd.nativeJdbcType
+          
+        if(classOf[String].isAssignableFrom(nativeJdbcType))
+          stringTypeDeclaration(fmd.length)
+        else if(classOf[BigDecimal].isAssignableFrom(nativeJdbcType))
+          bigDecimalTypeDeclaration(fmd.length, fmd.scale)
+        else             
+          databaseTypeFor(fmd.schema.fieldMapper, nativeJdbcType)        
+      }
     )
 
   def writeColumnDeclaration(fmd: FieldMetaData, isPrimaryKey: Boolean, schema: Schema): String = {
@@ -441,14 +438,14 @@ trait DatabaseAdapter {
   //with values at any time (via : a kind of prettyStatement method)
   protected def writeValue(o: AnyRef, fmd: FieldMetaData, sw: StatementWriter):String =
     if(sw.isForDisplay) {
-      val v = fmd.get(o)
+      val v = fmd.getNativeJdbcValue(o)
       if(v != null)
         v.toString
       else
         "null"
     }
     else {
-      sw.addParam(convertToJdbcValue(fmd.get(o)))
+      sw.addParam(convertToJdbcValue(fmd.getNativeJdbcValue(o)))
       "?"
     }
 
@@ -474,7 +471,7 @@ trait DatabaseAdapter {
   def createSequenceName(fmd: FieldMetaData) = 
     "s_" + fmd.parentMetaData.viewOrTable.name + "_" + fmd.columnName
 
-  def writeConcatFunctionCall(fn: FunctionNode[_], sw: StatementWriter) = {
+  def writeConcatFunctionCall(fn: FunctionNode, sw: StatementWriter) = {
     sw.write(fn.name)
     sw.write("(")
     sw.writeNodesWithSeparator(fn.args, ",", false)
@@ -781,10 +778,41 @@ trait DatabaseAdapter {
     sw.write(quoteName(a))
   }
 
-  def databaseTypeFor(c: Class[_]) =
-    _declarationHandler.handleType(c, None)
+  def databaseTypeFor(fieldMapper: FieldMapper, c: Class[_]): String = {
+    val ar = fieldMapper.sampleValueFor(c)
+    val decl = 
+      if(ar.isInstanceOf[Enumeration#Value])                 
+        intTypeDeclaration
+      else if(classOf[String].isAssignableFrom(c))
+        stringTypeDeclaration                  
+      else if(ar.isInstanceOf[java.sql.Timestamp])
+        timestampTypeDeclaration                  
+      else if(ar.isInstanceOf[java.util.Date])
+        dateTypeDeclaration
+      else if(ar.isInstanceOf[java.lang.Integer])
+        intTypeDeclaration
+      else if(ar.isInstanceOf[java.lang.Long])
+        longTypeDeclaration
+      else if(ar.isInstanceOf[java.lang.Boolean])
+        booleanTypeDeclaration
+      else if(ar.isInstanceOf[java.lang.Double])
+        doubleTypeDeclaration
+      else if(ar.isInstanceOf[java.lang.Float])
+        floatTypeDeclaration
+      else if(ar.isInstanceOf[java.util.UUID])
+        uuidTypeDeclaration
+      else if(classOf[scala.Array[Byte]].isAssignableFrom(c))
+        binaryTypeDeclaration
+      else if(classOf[BigDecimal].isAssignableFrom(c))
+        bigDecimalTypeDeclaration                  
+      else
+        Utils.throwError("unsupported type " + ar.getClass.getCanonicalName)
+                  
+      decl    
+  }
 
-  def writeCastInvocation(e: TypedExpressionNode[_], sw: StatementWriter) = {
+/*
+  def writeCastInvocation(e: TypedExpression[_,_], sw: StatementWriter) = {
     sw.write("cast(")
     e.write(sw)
 
@@ -795,7 +823,7 @@ trait DatabaseAdapter {
     sw.write(")")
   }
 
-  def writeCaseStatement(toMatch: Option[ExpressionNode], cases: Iterable[(ExpressionNode, TypedExpressionNode[_])], otherwise: TypedExpressionNode[_], sw: StatementWriter) = {
+  def writeCaseStatement(toMatch: Option[ExpressionNode], cases: Iterable[(ExpressionNode, TypedExpression[_,_])], otherwise: TypedExpression[_,_], sw: StatementWriter) = {
 
     sw.write("(case ")
     toMatch.foreach(_.write(sw))
@@ -816,4 +844,5 @@ trait DatabaseAdapter {
     sw.unindent
     sw.write("end)")
   }
+*/  
 }

@@ -25,8 +25,7 @@ import collection.mutable.ArrayBuffer
 import scala.runtime.NonLocalReturnControl
 
 trait QueryDsl
-  extends DslFactory
-  with WhereState[Unconditioned]
+  extends WhereState[Unconditioned]
   with ComputeMeasuresSignaturesFromStartOrWhereState
   with StartState
   with QueryElements[Unconditioned]
@@ -34,6 +33,33 @@ trait QueryDsl
   with FromSignatures {
   outerQueryDsl =>
   
+  implicit def queryToIterable[R](q: Query[R]): Iterable[R] = {
+    
+    val i = q.iterator
+                
+    new Iterable[R] {
+
+      val hasFirst = i.hasNext
+                  
+      lazy val firstRow = 
+        if(hasFirst) Some(i.next) else None    
+      
+      override def head = firstRow.get
+      
+      override def headOption = firstRow
+      
+      override def isEmpty = ! hasFirst
+      
+      def iterator = 
+        new IteratorConcatenation(firstRow.iterator, i)
+      
+    }
+  }
+  
+//  implicit def viewToIterable[R](t: View[R]): Iterable[R] = 
+//      queryToIterable(view2QueryAll(t))
+  
+
   def using[A](session: Session)(a: =>A): A =
     _using(session, a _)
 
@@ -152,24 +178,92 @@ trait QueryDsl
   def where(b: =>LogicalBoolean): WhereState[Conditioned] =
     new QueryElementsImpl[Conditioned](Some(b _))
 
-  def &[A](i: =>TypedExpressionNode[A]): A =
+  def &[A,T](i: =>TypedExpression[A,T]): A =
     FieldReferenceLinker.pushExpressionOrCollectValue[A](i _)
+    
+  
+  implicit def typedExpression2OrderByArg[E <% TypedExpression[_,_]](e: E) = new OrderByArg(e)
 
-  implicit def singleColumnQuery2RightHandSideOfIn[A](q: Query[A]) =
-    new RightHandSideOfIn[A](q.copy(false).ast)
+  implicit def orderByArg2OrderByExpression(a: OrderByArg) = new OrderByExpression(a)
 
-  implicit def measureSingleColumnQuery2RightHandSideOfIn[A](q: Query[Measures[A]]) =
-    new RightHandSideOfIn[A](q.copy(false).ast)
+  def sDevPopulation[T2 >: TOptionFloat, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("stddev_pop", Seq(b)))
+         
+  def sDevSample[T2 >: TOptionFloat, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("stddev_samp", Seq(b)))
+         
+  def varPopulation[T2 >: TOptionFloat, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("var_pop", Seq(b)))
+         
+  def varSample[T2 >: TOptionFloat, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("var_samp", Seq(b)))
+  
+  def max[T2 >: TOption, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("max", Seq(b)))
 
-  implicit def measureOptionSingleColumnQuery2RightHandSideOfIn[A](q: Query[Measures[Option[A]]]) =
-    new RightHandSideOfIn[A](q.copy(false).ast)
+  def min[T2 >: TOption, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("min", Seq(b)))
 
-  implicit def groupSingleColumnQuery2RightHandSideOfIn[A](q: Query[Group[A]]) =
-    new RightHandSideOfIn[A](q.copy(false).ast)
+  def avg[T2 >: TOptionFloat, T1 <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("avg", Seq(b)))
 
-  implicit def groupOptionSingleColumnQuery2RightHandSideOfIn[A](q: Query[Group[Option[A]]]) =
-    new RightHandSideOfIn[A](q.copy(false).ast)
+  def sum[T2 >: TOption, T1 >: TNumericLowerTypeBound <: T2, A1, A2]
+         (b: TypedExpression[A1,T1])
+         (implicit f: TypedExpressionFactory[A2,T2]) = f.convert(new FunctionNode("sum", Seq(b)))
 
+  def nvl[T4 <: TNonOption,
+          T1 >: TOption,
+          T3 >: T1,
+          T2 <: T3,
+          A1,A2,A3]
+         (a: TypedExpression[A1,T1],
+          b: TypedExpression[A2,T2])
+         (implicit d: DeOptionizer[A3,T4,_,T3]): TypedExpression[A3,T4] = new NvlNode(a, d.deOptionizer.convert(b))
+  
+  def not(b: LogicalBoolean) = new FunctionNode("not", Seq(b)) with LogicalBoolean
+
+  def upper[A1,T1](s: TypedExpression[A1,T1])(implicit f: TypedExpressionFactory[A1,T1], ev2: T1 <:< TOptionString) = 
+    f.convert(new FunctionNode("upper", Seq(s)))
+  
+  def lower[A1,T1](s: TypedExpression[A1,T1])(implicit f: TypedExpressionFactory[A1,T1], ev2: T1 <:< TOptionString) = 
+    f.convert(new FunctionNode("lower", Seq(s)))
+
+  def exists[A1](query: Query[A1]) = new ExistsExpression(query.copy(false).ast, "exists")
+
+  def notExists[A1](query: Query[A1]) = new ExistsExpression(query.copy(false).ast, "not exists")
+         
+  implicit val numericComparisonEvidence   = new CanCompare[TNumeric, TNumeric]         
+  implicit val dateComparisonEvidence      = new CanCompare[TOptionDate, TOptionDate]
+  implicit val timestampComparisonEvidence = new CanCompare[TOptionTimestamp, TOptionTimestamp]
+  implicit val stringComparisonEvidence    = new CanCompare[TOptionString, TOptionString]
+  implicit val booleanComparisonEvidence   = new CanCompare[TOptionBoolean, TOptionBoolean]
+  implicit val uuidComparisonEvidence      = new CanCompare[TOptionUUID, TOptionUUID]
+  implicit def enumComparisonEvidence[A]   = new CanCompare[TEnumValue[A],TEnumValue[A]]
+  
+  implicit def concatenationConversion[A1,A2,T1,T2](co: ConcatOp[A1,A2,T1,T2]): TypedExpression[String,TString] = 
+    new ConcatOperationNode[String,TString](co.a1, co.a2, PrimitiveTypeMode.stringTEF.createOutMapper)
+    
+  implicit def concatenationConversionWithOption1[A1,A2,T1,T2](co: ConcatOp[Option[A1],A2,T1,T2]): TypedExpression[Option[String],TOptionString] = 
+    new ConcatOperationNode[Option[String],TOptionString](co.a1, co.a2, PrimitiveTypeMode.optionStringTEF.createOutMapper)
+  
+  implicit def concatenationConversionWithOption2[A1,A2,T1,T2](co: ConcatOp[A1,Option[A2],T1,T2]): TypedExpression[Option[String],TOptionString] = 
+    new ConcatOperationNode[Option[String],TOptionString](co.a1, co.a2, PrimitiveTypeMode.optionStringTEF.createOutMapper)
+  
+  implicit def concatenationConversionWithOption3[A1,A2,T1,T2](co: ConcatOp[Option[A1],Option[A2],T1,T2]): TypedExpression[Option[String],TOptionString] = 
+    new ConcatOperationNode[Option[String],TOptionString](co.a1, co.a2, PrimitiveTypeMode.optionStringTEF.createOutMapper)
+  
+  class ConcatOperationNode[A,T](e1: ExpressionNode, e2: ExpressionNode, val mapper: OutMapper[A]) extends BinaryOperatorNode(e1,e2, "||", false) with TypedExpression[A,T] {
+    override def doWrite(sw: StatementWriter) =
+      sw.databaseAdapter.writeConcatOperator(e1, e2, sw)       
+  }
+    
   trait SingleRowQuery[R] {
     self: Query[R] =>
   }
@@ -184,16 +278,46 @@ trait QueryDsl
 
   implicit def countQueryableToIntTypeQuery[R](q: Queryable[R]) = new CountSubQueryableQuery(q)
 
+  def count: CountFunction = count()
+
+  def count(e: TypedExpression[_,_]*) = new CountFunction(e, false)
+
+  def countDistinct(e: TypedExpression[_,_]*) = new CountFunction(e, true)
+  
+  class CountFunction(_args: Seq[ExpressionNode], isDistinct: Boolean) 
+    extends FunctionNode("count",
+      _args match {
+        case Nil =>Seq(new TokenExpressionNode("*")) 
+        case _   => _args
+      }
+    )
+    with TypedExpression[Long,TLong] {
+    
+    def mapper = PrimitiveTypeMode.longTEF.createOutMapper    
+    
+    override def doWrite(sw: StatementWriter) = {
+
+      sw.write(name)
+      sw.write("(")
+
+      if(isDistinct)
+        sw.write("distinct ")
+
+      sw.writeNodesWithSeparator(args, ",", false)
+      sw.write(")")
+    }
+  }
+  
   private def _countFunc = count
   
-  class CountSubQueryableQuery(q: Queryable[_]) extends Query[LongType] with ScalarQuery[LongType] {
+  class CountSubQueryableQuery(q: Queryable[_]) extends Query[Long] with ScalarQuery[Long] {
 
-    private val _inner:Query[Measures[LongType]] =
+    private val _inner:Query[Measures[Long]] =
       from(q)(r => compute(_countFunc))
 
     def iterator = _inner.map(m => m.measures).iterator
 
-    def Count: ScalarQuery[LongType] = this
+    def Count: ScalarQuery[Long] = this
 
     def statement: String = _inner.statement
 
@@ -251,9 +375,12 @@ trait QueryDsl
       q.invokeYield(rsm, rs).measures
   }
 
+  /**
+   * Used for supporting 'inhibitWhen' dynamic queries
+   */
   implicit def queryable2OptionalQueryable[A](q: Queryable[A]) = new OptionalQueryable[A](q)
 
-  implicit def view2QueryAll[A](v: View[A]) = from(v)(a=> select(a))
+  //implicit def view2QueryAll[A](v: View[A]) = from(v)(a=> select(a))
 
   def update[A](t: Table[A])(s: A =>UpdateStatement):Int = t.update(s)
 
@@ -302,7 +429,7 @@ trait QueryDsl
     }
 
     private def _viewReferedInExpression(v: View[_], ee: EqualityExpression) =
-      ee.filterDescendantsOfType[SelectElementReference[Any]].filter(
+      ee.filterDescendantsOfType[SelectElementReference[Any,Any]].filter(
         _.selectElement.origin.asInstanceOf[ViewExpressionNode[_]].view == v
       ).headOption != None
 
@@ -562,7 +689,7 @@ trait QueryDsl
    * returns a (FieldMetaData, FieldMetaData) where ._1 is the id of the KeyedEntity on the left or right side,
    * and where ._2 is the foreign key of the association object/table
    */
-  private def _splitEquality(ee: EqualityExpression, rightTable: Table[_], isSelfReference: Boolean) = {
+  private def _splitEquality(ee: EqualityExpression, rightTable: Table[_], isSelfReference: Boolean):(FieldMetaData,FieldMetaData) = {
 
     if(isSelfReference)
       assert(ee.right._fieldMetaData.isIdFieldOfKeyedEntity || ee.left._fieldMetaData.isIdFieldOfKeyedEntity)
@@ -623,11 +750,11 @@ trait QueryDsl
   implicit def t9te[A1,A2,A3,A4,A5,A6,A7,A8,A9](t: (A1,A2,A3,A4,A5,A6,A7,A8,A9)) = new CompositeKey9[A1,A2,A3,A4,A5,A6,A7,A8,A9](t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9)
 
   // Case statements :
-
+/*
   def caseOf[A](expr: NumericalExpression[A]) = new CaseOfNumericalExpressionMatchStart(expr)
 
   def caseOf[A](expr: NonNumericalExpression[A]) = new CaseOfNonNumericalExpressionMatchStart(expr)
 
   def caseOf = new CaseOfConditionChainStart
-
+*/
 }

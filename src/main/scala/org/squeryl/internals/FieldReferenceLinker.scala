@@ -20,10 +20,11 @@ import net.sf.cglib.proxy._
 import collection.mutable.{HashSet, ArrayBuffer}
 import org.squeryl.dsl.ast._
 import org.squeryl.dsl.CompositeKey
+import org.squeryl.dsl.TypedExpression
 
 object FieldReferenceLinker {
 
-  def pushExpressionOrCollectValue[T](e: ()=>TypedExpressionNode[T]): T = {
+  def pushExpressionOrCollectValue[T](e: ()=>TypedExpression[T,_]): T = {
     if (isYieldInspectionMode) {
       val yi = _yieldInspectionTL.get
       val expr = yi.callWithoutReentrance(e)
@@ -157,9 +158,9 @@ object FieldReferenceLinker {
     res
   }
 
-  private def _takeLastAccessedUntypedFieldReference: SelectElementReference[_] =
+  private def _takeLastAccessedUntypedFieldReference: SelectElementReference[_,_] =
     FieldReferenceLinker.takeLastAccessedFieldReference match {
-      case Some(n:SelectElement) => new SelectElementReference(n)(NoOpOutMapper)
+      case Some(n:SelectElement) => new SelectElementReference(n,NoOpOutMapper)
       case None => org.squeryl.internals.Utils.throwError("Thread local does not have a last accessed field... this is a severe bug !")
   }
 
@@ -176,7 +177,7 @@ object FieldReferenceLinker {
 
     new BinaryOperatorNodeLogicalBoolean(
       fr,
-      new InputOnlyConstantExpressionNode[Any](c),
+      new InputOnlyConstantExpressionNode(c),
       "=")
   }
   
@@ -307,7 +308,7 @@ object FieldReferenceLinker {
 
         if(isComposite) {
           val ck = res.asInstanceOf[CompositeKey]
-          ck._members = Some(_compositeKeyMembers.get.get.map(new SelectElementReference[Any](_)(NoOpOutMapper)))
+          ck._members = Some(_compositeKeyMembers.get.get.map(new SelectElementReference[Any,Any](_,NoOpOutMapper)))
           ck._propertyName = Some(m.getName)
           _compositeKeyMembers.remove()
         }

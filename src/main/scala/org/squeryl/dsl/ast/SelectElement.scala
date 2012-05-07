@@ -19,6 +19,7 @@ import collection.mutable.ArrayBuffer
 import org.squeryl.internals._
 import java.sql.ResultSet
 import org.squeryl.Session
+import org.squeryl.dsl.TypedExpression
 
 /**
  * SelectElement are elements of a select list, for example they are a,b, and c in :
@@ -118,35 +119,6 @@ trait SelectElement extends ExpressionNode {
     expression.write(sw)
     sw.write(" as ")
     sw.databaseAdapter.writeSelectElementAlias(this, sw)
-  }
-
-  /**
-   * Will throw a ClassCastException if this type is not a Enumeration#Value
-   */
-  def createEnumerationMapper(s: Enumeration#Value): OutMapper[Enumeration#Value] = new OutMapper[Enumeration#Value]() {
-
-    def doMap(rs: ResultSet) = {
-      val fmd = outer.asInstanceOf[FieldSelectElement].fieldMetaData
-      fmd.canonicalEnumerationValueFor(rs.getInt(this.index)).get
-    }
-
-    def sample = s
-  }
-
-  /**
-   * Will throw a ClassCastException if this type is not a Enumeration#Value
-   */
-  def createEnumerationOptionMapper(s: Option[Enumeration#Value]): OutMapper[Option[Enumeration#Value]] = new OutMapper[Option[Enumeration#Value]]() {
-
-    def doMap(rs: ResultSet) = {
-      val fmd = outer.asInstanceOf[FieldSelectElement].fieldMetaData
-      fmd.canonicalEnumerationValueFor(rs.getInt(this.index))
-    }
-
-    def sample = 
-      if(s == None) 
-        org.squeryl.internals.Utils.throwError("can't find a sample value for enum " + outer)
-      else s
   }
 }
 
@@ -258,10 +230,10 @@ class ValueSelectElement
  * with the exception of SelectElement that refer to an inner or outer query's SelectElement,
  * these are ExportedSelectElement
  */
-class SelectElementReference[A]
-  (val selectElement: SelectElement)(implicit val mapper: OutMapper[A])
-    extends TypedExpressionNode[A] {
-
+class SelectElementReference[A,T]
+  (val selectElement: SelectElement, val mapper: OutMapper[A])
+    extends TypedExpression[A,T] {
+    
   override def toString =
     'SelectElementReference + ":" + Utils.failSafeString(delegateAtUseSite.alias) + ":" + selectElement.typeOfExpressionToString + inhibitedFlagForAstDump
 

@@ -16,10 +16,13 @@ package org.squeryl.test.customtypes
  * limitations under the License.
  ***************************************************************************** */
 import java.sql.SQLException
-import org.squeryl.customtypes._
 import org.squeryl.{KeyedEntity, Schema}
 import org.squeryl.framework._
+import org.squeryl.customtypes._
 
+import CustomTypesMode._
+
+ 
 abstract class TestCustomTypesMode extends SchemaTester with QueryTester with RunTestsInsideTransaction {
 
   val schema = new HospitalDb
@@ -74,7 +77,6 @@ class TestData(schema : HospitalDb){
 object HospitalDb extends HospitalDb
 
 class HospitalDb extends Schema {
-  import CustomTypesMode._
   
   val patients = table[Patient]
 
@@ -98,6 +100,8 @@ class Patient(var firstName: FirstName, var age: Option[Age], var weight: Option
 
 class PatientInfo(val info: Info) extends KeyedEntity[IntField] {
 
+  def this() = this(new Info(""))
+  
   val patientId: IntField = null
 
   val id: IntField = null
@@ -146,3 +150,5 @@ class Info(v: String) extends StringField(v) with Domain[String] {
   def validate(s:String) = {}
   def label = "info"
 }
+
+

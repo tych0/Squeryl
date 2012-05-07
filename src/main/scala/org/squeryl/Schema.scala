@@ -22,8 +22,9 @@ import reflect.{Manifest}
 import java.sql.SQLException
 import java.io.PrintWriter
 import collection.mutable.{HashMap, HashSet, ArrayBuffer}
+import org.squeryl.internals.FieldMapper
 
-trait Schema {
+class Schema(implicit val fieldMapper: FieldMapper) {
 
   protected implicit def thisSchema = this
 
@@ -354,14 +355,7 @@ trait Schema {
     
   private [squeryl] def _addTableType(typeT: Class[_], t: Table[_]) =
     _tableTypes += ((typeT, t))
-  
-  protected def view[T]()(implicit manifestT: Manifest[T]): View[T] =
-    view(tableNameFromClass(manifestT.erasure))(manifestT)
 
-  protected def view[T](name: String)(implicit manifestT: Manifest[T]): View[T] =
-    new View[T](name)(manifestT)
-
-  
   class ReferentialEvent(val eventName: String) {
     def restrict = new ReferentialActionImpl("restrict", this)
     def cascade = new ReferentialActionImpl("cascade", this)
@@ -430,11 +424,11 @@ trait Schema {
     for(ca <- colAss) ca match {
       case dva:DefaultValueAssignment    => {
 
-        if(! dva.value.isInstanceOf[ConstantExpressionNode[_]])
+        if(! dva.value.isInstanceOf[ConstantTypedExpression[_,_]])
           org.squeryl.internals.Utils.throwError("error in declaration of column "+ table.prefixedName + "." + dva.left.nameOfProperty + ", " +
                 "only constant expressions are supported in 'defaultsTo' declaration")
 
-        dva.left._defaultValue = Some(dva.value.asInstanceOf[ConstantExpressionNode[_]])
+        dva.left._defaultValue = Some(dva.value.asInstanceOf[ConstantTypedExpression[_,_]])
       }
       case caa:ColumnAttributeAssignment => {
 
@@ -516,7 +510,7 @@ trait Schema {
       new ColumnGroupAttributeAssignment(cols, columnAttributes)
   }
 
-  def columns(fieldList: TypedExpressionNode[_]*) = new ColGroupDeclaration(fieldList.map(_._fieldMetaData))
+  def columns(fieldList: TypedExpression[_,_]*) = new ColGroupDeclaration(fieldList.map(_._fieldMetaData))
 
   // POSO Life Cycle Callbacks :
 
@@ -560,7 +554,7 @@ trait Schema {
     new LifecycleEventPercursorClass[A](m.erasure, this, BeforeInsert)
 
   protected def beforeUpdate[A](t: Table[A]) =
-    new LifecycleEventPercursorTable[A](t, BeforeInsert)
+    new LifecycleEventPercursorTable[A](t, BeforeUpdate)
 
   protected def beforeUpdate[A]()(implicit m: Manifest[A]) =
     new LifecycleEventPercursorClass[A](m.erasure, this, BeforeUpdate)
