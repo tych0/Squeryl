@@ -615,8 +615,8 @@ class Schema(implicit val fieldMapper: FieldMapper) {
     /**
      * Same as {{{table.update(a)}}}
      */  
-    def update(implicit ev: A <:< KeyedEntity[_]) =
-      _performAction(_.update(a))
+    def update[K](implicit ev: A <:< KeyedEntity[K]) =
+      _performAction(_.update(a)(ev, queryDsl))
       
   }
 

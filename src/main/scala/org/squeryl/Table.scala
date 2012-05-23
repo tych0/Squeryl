@@ -110,13 +110,13 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
 //  def insert(t: Query[T]) = org.squeryl.internals.Utils.throwError("not implemented")
 
-  def insert(e: Iterable[T]):Unit =
+  def insert(e: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
     _batchedUpdateOrInsert(e, t => posoMetaData.fieldsMetaData.filter(fmd => !fmd.isAutoIncremented && fmd.isInsertable), true, false)
 
   /**
    * isInsert if statement is insert otherwise update
    */
-  private def _batchedUpdateOrInsert(e: Iterable[T], fmdCallback: T => Iterable[FieldMetaData], isInsert: Boolean, checkOCC: Boolean):Unit = {
+  private def _batchedUpdateOrInsert(e: Iterable[T], fmdCallback: T => Iterable[FieldMetaData], isInsert: Boolean, checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] = {
     
     val it = e.iterator
 
@@ -181,31 +181,37 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
         st.close
       }
 
-      for(a <- forAfterUpdateOrInsert)
+      for (a <- forAfterUpdateOrInsert) yield {
+        val a0 =
+          if (posoMetaData.hasDbManagedFields) {
+            val r = refresh(a.asInstanceOf[T]) getOrElse (internals.Utils.throwError("could not find record to refresh"))
+            r.asInstanceOf[AnyRef]
+          } else
+            a
         if(isInsert)
-          _callbacks.afterInsert(a)
+          _callbacks.afterInsert(a0).asInstanceOf[T]
         else
-          _callbacks.afterUpdate(a)
-
-    }
+          _callbacks.afterUpdate(a0).asInstanceOf[T]
+      }
+    } else Nil
   }
 
   /**
    * Updates without any Optimistic Concurrency Control check 
    */
-  def forceUpdate(o: T)(implicit ev: T <:< KeyedEntity[_]) =
+  def forceUpdate(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T =
     _update(o, false)
   
-  def update(o: T)(implicit ev: T <:< KeyedEntity[_]):Unit =
+  def update(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T =
     _update(o, true)
 
-  def update(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_]):Unit =
+  def update(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
     _update(o, true)
 
-  def forceUpdate(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_]):Unit =
+  def forceUpdate(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
     _update(o, false)
 
-  private def _update(o: T, checkOCC: Boolean) = {
+  private def _update(o: T, checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
 
     val dba = Session.currentSession.databaseAdapter
     val sw = new StatementWriter(dba)
@@ -221,14 +227,28 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
            "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", occVersionNumber=" + version +
            ") has become stale, it cannot be updated under optimistic concurrency control")
       }
+      else if (checkOCC && posoMetaData.isPgOptimistic) {
+        throw new StaleUpdateException(
+          "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", " +
+            posoMetaData.pgOptimisticDescr(o.asInstanceOf[AnyRef]) +
+            ") has become stale, it cannot be updated under optimistic concurrency control")
+      }
       else
         org.squeryl.internals.Utils.throwError("failed to update")
     }
 
-    _callbacks.afterUpdate(o0.asInstanceOf[AnyRef])
+    // Can't use RETURNING here due to PG JDBC bug (no update counts with RETURNING)
+
+    val result =
+      if (posoMetaData.hasDbManagedFields)
+        refresh(o0) getOrElse (internals.Utils.throwError("could not find record to refresh"))
+      else
+        o0
+
+    _callbacks.afterUpdate(result.asInstanceOf[AnyRef]).asInstanceOf[T]
   }
 
-  private def _update(e: Iterable[T], checkOCC: Boolean):Unit = {
+  private def _update(e: Iterable[T], checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] = {
 
     def buildFmds(t: T): Iterable[FieldMetaData] = {
       val pkList = posoMetaData.primaryKey.getOrElse(
@@ -252,7 +272,8 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
       List(
         posoMetaData.fieldsMetaData.filter(fmd=> ! fmd.isIdFieldOfKeyedEntity && ! fmd.isOptimisticCounter && fmd.isUpdatable).toList,
         pkList,
-        posoMetaData.optimisticCounter.toList
+        posoMetaData.optimisticCounter.toList,
+        posoMetaData.pgOptimisticValues.toList
       ).flatten
     }
 
@@ -324,7 +345,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     deleteCount == 1
   }
 
-  def insertOrUpdate(o: T)(implicit ev: T <:< KeyedEntity[_]): T = {
+  def insertOrUpdate(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
     if(o.isPersisted)
       update(o)
     else

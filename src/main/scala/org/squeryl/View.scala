@@ -112,6 +112,17 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
     else
       None
   }
+
+  def refresh(t: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Option[T] = {
+    //TODO: find out why scalac won't let dsl be passed to another method
+    import dsl._
+
+    val q = from(this)(a => dsl.where {
+      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(a.id, t.id)
+    } select(a))
+
+    q.toList.headOption
+  }
   
   /**
    * Will throw an exception if the given key (k) returns no row.

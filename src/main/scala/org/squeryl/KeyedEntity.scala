@@ -82,6 +82,13 @@ trait Optimistic {
   protected val occVersionNumber = 0
 }
 
+trait PgOptimistic {
+  self: KeyedEntity[_] =>
+
+  protected val xmin: Int = 0
+  // protected val ctid: String = ""
+}
+
 class StaleUpdateException(message: String) extends RuntimeException(message)
 
 trait EntityMember {

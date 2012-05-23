@@ -34,6 +34,8 @@ class PosoMetaData[T](val clasz: Class[T], val schema: Schema, val viewOrTable: 
      fieldsMetaData.find(fmd => fmd.nameOfProperty == name)
 
   val isOptimistic = classOf[Optimistic].isAssignableFrom(clasz)
+
+  val isPgOptimistic = classOf[PgOptimistic].isAssignableFrom(clasz)
   
   val constructor =
     _const.headOption.orElse(org.squeryl.internals.Utils.throwError(clasz.getName +
@@ -107,9 +109,11 @@ class PosoMetaData[T](val clasz: Class[T], val schema: Schema, val viewOrTable: 
 
       val property = (field, getter, setter, a)
 
+      val isPgOptimisticValue = isPgOptimistic && List("xmin", "ctid").contains(name)
+
       if(isImplicitMode && _groupOfMembersIsProperty(property)) 
         try {
-          fmds.append(FieldMetaData.factory.build(this, name, property, sampleInstance4OptionTypeDeduction, isOptimistic && name == "occVersionNumber"))
+          fmds.append(FieldMetaData.factory.build(this, name, property, sampleInstance4OptionTypeDeduction, isOptimistic && name == "occVersionNumber", isPgOptimisticValue))
         }
         catch {
           case e:Exception => throw new RuntimeException(
@@ -158,6 +162,12 @@ class PosoMetaData[T](val clasz: Class[T], val schema: Schema, val viewOrTable: 
 
   def optimisticCounter =
     fieldsMetaData.find(fmd => fmd.isOptimisticCounter)
+
+  def pgOptimisticValues =
+    fieldsMetaData.filter(fmd => fmd.isPgOptimisticValue)
+
+  def pgOptimisticDescr(o: AnyRef) =
+    fieldsMetaData.filter(_.isPgOptimisticValue) map (f => f.nameOfProperty + " = " + f.getNativeJdbcValue(o)) mkString(", ")
 
   if(isOptimistic)
     assert(optimisticCounter != None)
@@ -326,6 +336,8 @@ class PosoMetaData[T](val clasz: Class[T], val schema: Schema, val viewOrTable: 
     for {
       m <- fieldsMetaData if m.isDbManaged
     } yield m
+
+  def hasDbManagedFields = ! dbManagedFields.isEmpty
 }
 
 

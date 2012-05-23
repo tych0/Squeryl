@@ -525,6 +525,15 @@ trait DatabaseAdapter {
          sw.write(" = ")
          sw.write(writeValue(o_, occ, sw))
       })
+
+      t.posoMetaData.pgOptimisticValues.foreach(
+        field => {
+          sw.write(" and ")
+          sw.write(quoteName(field.columnName))
+          sw.write(" = ")
+          sw.write(writeValue(o_, field, sw))
+        }
+      )
   }
 
   def writeDelete[T](t: Table[T], whereClause: Option[ExpressionNode], sw: StatementWriter) = {
