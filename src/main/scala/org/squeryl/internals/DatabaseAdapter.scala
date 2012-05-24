@@ -361,6 +361,8 @@ trait DatabaseAdapter {
   }
 
   def executeUpdateAndCloseStatement(s: Session, sw: StatementWriter): Int = exec(s, sw) { params =>
+    if(s.isLoggingEnabled)
+      s.log(sw.toString)
     val st = s.connection.prepareStatement(sw.statement)
     fillParamsInto(params, st)
     try {
@@ -372,6 +374,8 @@ trait DatabaseAdapter {
   }
 
   def executeUpdateForInsert[T](s: Session, sw: StatementWriter, ps: PreparedStatement): Boolean = exec(s, sw) { params =>
+    if(s.isLoggingEnabled)
+      s.log(sw.toString)
     fillParamsInto(params, ps)
     ps.execute()
   }
