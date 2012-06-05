@@ -393,11 +393,9 @@ trait DatabaseAdapter {
     sw.write(
       f.map(fmd => writeValue(o_, fmd, sw)
     ).mkString("(",",",")"));
-
-    writeReturningClause(t, sw)
   }
 
-  protected def writeReturningClause[T](t: Table[T], sw: StatementWriter) {
+  protected [squeryl] def writeReturningClause[T](t: Table[T], sw: StatementWriter) {
     if (supportsReturningClause) {
       val f = t.posoMetaData.dbManagedFields.toList
 

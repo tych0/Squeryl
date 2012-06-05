@@ -82,8 +82,6 @@ class PostgreSqlAdapter extends DatabaseAdapter {
     sw.write(colNames.map(fmd => quoteName(fmd.columnName)).mkString(", "));
     sw.write(") values ");
     sw.write(colVals.mkString("(",",",")"));
-
-    writeReturningClause(t, sw)
   }
 
   override def supportsAutoIncrementInColumnDeclaration: Boolean = false

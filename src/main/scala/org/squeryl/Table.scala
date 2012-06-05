@@ -39,6 +39,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     val sess = Session.currentSession
     val sw = new StatementWriter(_dbAdapter)
     _dbAdapter.writeInsert(t, this, sw)
+    _dbAdapter.writeReturningClause(this, sw)
 
     val st =
       (_dbAdapter.supportsAutoIncrementInColumnDeclaration, posoMetaData.primaryKey) match {
