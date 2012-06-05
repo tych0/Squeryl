@@ -209,47 +209,58 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
   def update(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T =
     _update(o, true)
 
+  def updateModified(prev: T, o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+    _update(o, true, fmd => fmd.get(prev) != fmd.get(o))
+  }
+
   def update(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
     _update(o, true)
 
   def forceUpdate(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
     _update(o, false)
 
-  private def _update(o: T, checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+  private def _update(o: T, checkOCC: Boolean, fieldFilter: FieldMetaData => Boolean = fmd => true)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
 
     val dba = Session.currentSession.databaseAdapter
     val sw = new StatementWriter(dba)
     val o0 = _callbacks.beforeUpdate(o.asInstanceOf[AnyRef]).asInstanceOf[T]
-    dba.writeUpdate(o0, this, sw, checkOCC)
-
-    val cnt  = dba.executeUpdateAndCloseStatement(Session.currentSession, sw)
-
-    if(cnt != 1) {
-      if(checkOCC && posoMetaData.isOptimistic) {
-        val version = posoMetaData.optimisticCounter.get.getNativeJdbcValue(o.asInstanceOf[AnyRef])
-        throw new StaleUpdateException(
-           "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", occVersionNumber=" + version +
-           ") has become stale, it cannot be updated under optimistic concurrency control")
-      }
-      else if (checkOCC && posoMetaData.isPgOptimistic) {
-        throw new StaleUpdateException(
-          "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", " +
-            posoMetaData.pgOptimisticDescr(o.asInstanceOf[AnyRef]) +
-            ") has become stale, it cannot be updated under optimistic concurrency control")
-      }
-      else
-        org.squeryl.internals.Utils.throwError("failed to update")
-    }
-
-    // Can't use RETURNING here due to PG JDBC bug (no update counts with RETURNING)
+    val runUpdate = dba.writeUpdate(o0, this, sw, checkOCC, fieldFilter)
 
     val result =
-      if (posoMetaData.hasDbManagedFields)
-        refresh(o0) getOrElse (internals.Utils.throwError("could not find record to refresh"))
-      else
+      if (runUpdate) {
+        val cnt  = dba.executeUpdateAndCloseStatement(Session.currentSession, sw)
+
+        if(cnt != 1) {
+          if(checkOCC && posoMetaData.isOptimistic) {
+            val version = posoMetaData.optimisticCounter.get.getNativeJdbcValue(o.asInstanceOf[AnyRef])
+            throw new StaleUpdateException(
+               "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", occVersionNumber=" + version +
+               ") has become stale, it cannot be updated under optimistic concurrency control")
+          }
+          else if (checkOCC && posoMetaData.isPgOptimistic) {
+            throw new StaleUpdateException(
+              "Object "+prefixedName + "(id=" + o.asInstanceOf[KeyedEntity[_]].id + ", " +
+                posoMetaData.pgOptimisticDescr(o.asInstanceOf[AnyRef]) +
+                ") has become stale, it cannot be updated under optimistic concurrency control")
+          }
+          else
+            org.squeryl.internals.Utils.throwError("failed to update")
+        }
+
+        // Can't use RETURNING here due to PG JDBC bug (no update counts with RETURNING)
+
+        if (posoMetaData.hasDbManagedFields)
+          refresh(o0) getOrElse (internals.Utils.throwError("could not find record to refresh"))
+        else
+          o0
+
+      } else {
         o0
+      }
 
     _callbacks.afterUpdate(result.asInstanceOf[AnyRef]).asInstanceOf[T]
+
+    result
   }
 
   private def _update(e: Iterable[T], checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] = {

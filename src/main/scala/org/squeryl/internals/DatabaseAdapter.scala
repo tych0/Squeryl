@@ -480,60 +480,68 @@ trait DatabaseAdapter {
 
   def isFullOuterJoinSupported = true
 
-  def writeUpdate[T](o: T, t: Table[T], sw: StatementWriter, checkOCC: Boolean) = {
+  def writeUpdate[T](o: T, t: Table[T], sw: StatementWriter, checkOCC: Boolean, fieldFilter: FieldMetaData => Boolean = fmd => true): Boolean = {
 
     val o_ = o.asInstanceOf[AnyRef]
 
+    val fmds = t.posoMetaData.fieldsMetaData.
+      filter(fmd=> ! fmd.isIdFieldOfKeyedEntity && fmd.isUpdatable).
+      filter(fieldFilter)
 
-    sw.write("update ", quoteName(t.prefixedName), " set ")
-    sw.nextLine
-    sw.indent
-    sw.writeLinesWithSeparator(
-      t.posoMetaData.fieldsMetaData.
-        filter(fmd=> ! fmd.isIdFieldOfKeyedEntity && fmd.isUpdatable).
-          map(fmd => {
-            if(fmd.isOptimisticCounter)
-              quoteName(fmd.columnName) + " = " + quoteName(fmd.columnName) + " + 1 "
-            else
-              quoteName(fmd.columnName) + " = " + writeValue(o_, fmd, sw)
-          }),
-      ","
-    )
-    sw.unindent
-    sw.write("where")
-    sw.nextLine
-    sw.indent
-    
-    t.posoMetaData.primaryKey.getOrElse(org.squeryl.internals.Utils.throwError("writeUpdate was called on an object that does not extend from KeyedEntity[]")).fold(
-      pkMd => sw.write(quoteName(pkMd.columnName), " = ", writeValue(o_, pkMd, sw)),
-      pkGetter => {
-        Utils.createQuery4WhereClause(t, (t0:T) => {
-          val ck = pkGetter.invoke(t0).asInstanceOf[CompositeKey]
+    if (fmds.isEmpty)
+      false
+    else {
+      sw.write("update ", quoteName(t.prefixedName), " set ")
+      sw.nextLine
+      sw.indent
+      sw.writeLinesWithSeparator(
+        fmds.map(fmd => {
+              if(fmd.isOptimisticCounter)
+                quoteName(fmd.columnName) + " = " + quoteName(fmd.columnName) + " + 1 "
+              else
+                quoteName(fmd.columnName) + " = " + writeValue(o_, fmd, sw)
+            }),
+        ","
+      )
+      sw.unindent
+      sw.write("where")
+      sw.nextLine
+      sw.indent
 
-          val fieldWhere = ck._fields map (fmd => quoteName(fmd.columnName) + " = " + writeValue(o_, fmd, sw))
-          sw.write(fieldWhere.mkString(" and "))
+      t.posoMetaData.primaryKey.getOrElse(org.squeryl.internals.Utils.throwError("writeUpdate was called on an object that does not extend from KeyedEntity[]")).fold(
+        pkMd => sw.write(quoteName(pkMd.columnName), " = ", writeValue(o_, pkMd, sw)),
+        pkGetter => {
+          Utils.createQuery4WhereClause(t, (t0:T) => {
+            val ck = pkGetter.invoke(t0).asInstanceOf[CompositeKey]
 
-          new EqualityExpression(new InputOnlyConstantExpressionNode(1), new InputOnlyConstantExpressionNode(1))
-        })
-      }
-    )
+            val fieldWhere = ck._fields map (fmd => quoteName(fmd.columnName) + " = " + writeValue(o_, fmd, sw))
+            sw.write(fieldWhere.mkString(" and "))
 
-    if(checkOCC)
-      t.posoMetaData.optimisticCounter.foreach(occ => {
-         sw.write(" and ")
-         sw.write(quoteName(occ.columnName))
-         sw.write(" = ")
-         sw.write(writeValue(o_, occ, sw))
-      })
-
-      t.posoMetaData.pgOptimisticValues.foreach(
-        field => {
-          sw.write(" and ")
-          sw.write(quoteName(field.columnName))
-          sw.write(" = ")
-          sw.write(writeValue(o_, field, sw))
+            new EqualityExpression(new InputOnlyConstantExpressionNode(1), new InputOnlyConstantExpressionNode(1))
+          })
         }
       )
+
+      if(checkOCC) {
+        t.posoMetaData.optimisticCounter.foreach(occ => {
+           sw.write(" and ")
+           sw.write(quoteName(occ.columnName))
+           sw.write(" = ")
+           sw.write(writeValue(o_, occ, sw))
+        })
+
+        t.posoMetaData.pgOptimisticValues.foreach(
+          field => {
+            sw.write(" and ")
+            sw.write(quoteName(field.columnName))
+            sw.write(" = ")
+            sw.write(writeValue(o_, field, sw))
+          }
+        )
+      }
+
+      true
+    }
   }
 
   def writeDelete[T](t: Table[T], whereClause: Option[ExpressionNode], sw: StatementWriter) = {
