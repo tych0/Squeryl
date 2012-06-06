@@ -210,7 +210,14 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     _update(o, true)
 
   def updateModified(prev: T, o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+    copyOccData(prev, o)
     _update(o, true, fmd => fmd.get(prev) != fmd.get(o))
+  }
+
+  private def copyOccData(prev: T, o: T)(implicit ev: T <:< KeyedEntity[_]) {
+    posoMetaData.fieldsMetaData
+      .filter (fmd => fmd.isOptimisticCounter || fmd.isPgOptimisticValue)
+      .foreach(fmd => fmd.set(o, fmd.get(prev)))
   }
 
   def update(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =

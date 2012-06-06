@@ -79,13 +79,13 @@ trait IndirectKeyedEntity[K,T] extends KeyedEntity[K] {
 trait Optimistic {
   self: KeyedEntity[_] =>
 
-  protected val occVersionNumber = 0
+  protected [squeryl] val occVersionNumber = 0
 }
 
 trait PgOptimistic {
   self: KeyedEntity[_] =>
 
-  protected val xmin: Int = 0
+  protected [squeryl] val xmin: Int = 0
   // protected val ctid: String = ""
 }
 
