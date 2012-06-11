@@ -102,12 +102,19 @@ trait ExpressionNode {
   }
 }
 
+class ListExpressionNode(override val children: List[ExpressionNode]) extends ExpressionNode {
+  override def doWrite(sw: StatementWriter) {
+    sw.writeNodesWithSeparator(children, ", ", false)
+  }
+}
 
-trait ListExpressionNode extends ExpressionNode {
-
-  def quotesElement = false
-  
-  def isEmpty: Boolean
+class RowValueConstructorNode(override val children: List[ExpressionNode]) extends ExpressionNode {
+  override def doWrite(sw: StatementWriter) {
+    // sw.write("ROW")
+    sw.write("(")
+    sw.writeNodesWithSeparator(children, ", ", false)
+    sw.write(")")
+  }
 }
 
 class EqualityExpression(override val left: TypedExpression[_,_], override val right: TypedExpression[_,_]) extends BinaryOperatorNodeLogicalBoolean(left, right, "=") {
