@@ -153,6 +153,7 @@ trait DatabaseAdapter {
       sw.write(p._2.toString)
       sw.write(" offset ")
       sw.write(p._1.toString)
+      sw.pushPendingNextLine
     })
 
 
