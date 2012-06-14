@@ -87,6 +87,12 @@ trait PgOptimistic {
 
   protected [squeryl] val xmin: Int = 0
   // protected val ctid: String = ""
+
+  def copyOccData[T <: KeyedEntity[_] with PgOptimistic](target: T)(implicit table: Table[T]) {
+    table.posoMetaData.fieldsMetaData filter (_.isPgOptimisticValue) foreach { fmd =>
+      fmd.set(target, fmd.get(this))
+    }
+  }
 }
 
 class StaleUpdateException(message: String) extends RuntimeException(message)
