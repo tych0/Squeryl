@@ -134,21 +134,29 @@ trait DatabaseAdapter {
       sw.pushPendingNextLine
     }
 
-    writeEndOfQueryHint(qen, sw)
+    writeEndOfQueryHint(() => qen.isForUpdate, qen, sw)
 
-    writePaginatedQueryDeclaration(qen, sw)
+    writePaginatedQueryDeclaration(() => qen.page, qen, sw)
   }
 
-  def writeEndOfQueryHint(qen: QueryExpressionElements, sw: StatementWriter) = 
-    if(qen.isForUpdate) {
+  def writeUnionQueryOptions(qen: QueryExpressionElements, sw: StatementWriter) {
+    if (! supportsUnionQueryOptions)
+      Utils.throwError("Database adapter does not support query options on a union query")
+
+    writeEndOfQueryHint(() => qen.unionIsForUpdate, qen, sw)
+    writePaginatedQueryDeclaration(() => qen.unionPage, qen, sw)
+  }
+
+  def writeEndOfQueryHint(isForUpdate: () => Boolean, qen: QueryExpressionElements, sw: StatementWriter) =
+    if(isForUpdate()) {
       sw.write("for update")
       sw.pushPendingNextLine
     }
 
   def writeEndOfFromHint(qen: QueryExpressionElements, sw: StatementWriter) = {}
 
-  def writePaginatedQueryDeclaration(qen: QueryExpressionElements, sw: StatementWriter):Unit = 
-    qen.page.foreach(p => {
+  def writePaginatedQueryDeclaration(page: () => Option[(Int, Int)], qen: QueryExpressionElements, sw: StatementWriter):Unit =
+    page().foreach(p => {
       sw.write("limit ")
       sw.write(p._2.toString)
       sw.write(" offset ")
@@ -251,6 +259,8 @@ trait DatabaseAdapter {
   def supportsAutoIncrementInColumnDeclaration:Boolean = true
 
   def supportsReturningClause = false
+
+  def supportsUnionQueryOptions = true
 
   def writeCreateTable[T](t: Table[T], sw: StatementWriter, schema: Schema) = {
 
