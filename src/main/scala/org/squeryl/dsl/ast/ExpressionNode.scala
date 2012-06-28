@@ -550,6 +550,9 @@ class RightHandSideOfIn[A](val ast: ExpressionNode, val isIn: Option[Boolean] = 
     if(ast.isInstanceOf[ConstantExpressionNodeList[_]]) {
       ast.asInstanceOf[ConstantExpressionNodeList[_]].isEmpty
     }
+    else if(ast.isInstanceOf[ListExpressionNode]) {
+      ast.asInstanceOf[ListExpressionNode].children.isEmpty
+    }
     else false
 
   override def doWrite(sw: StatementWriter) =
