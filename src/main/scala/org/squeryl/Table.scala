@@ -43,8 +43,8 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
     val st =
       (_dbAdapter.supportsAutoIncrementInColumnDeclaration, posoMetaData.primaryKey) match {
-        case (true, a:Any) => sess.connection.prepareStatement(sw.statement, Statement.RETURN_GENERATED_KEYS)
-        case (false, Some(Left(pk:FieldMetaData))) => {
+        case (true, a:Any) if ! hasDbManagedFields => sess.connection.prepareStatement(sw.statement, Statement.RETURN_GENERATED_KEYS)
+        case (false, Some(Left(pk:FieldMetaData))) if ! hasDbManagedFields => {
           val autoIncPk = new Array[String](1)
           autoIncPk(0) = pk.columnName
           sess.connection.prepareStatement(sw.statement, autoIncPk)
