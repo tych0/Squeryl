@@ -135,14 +135,6 @@ class QueryExpressionNode[R](_query: AbstractQuery[R],
     }
   }
 
-  def propagateOuterScope() {
-    for {
-      node <- children if ! node.isInstanceOf[UnionExpressionNode]
-    } {
-      node.filterDescendantsOfType[NestedExpression].foreach((n) => n.propagateOuterScope(this))
-    }
-  }
-
   def selectList: Iterable[SelectElement] = _selectList
 
   def doWrite(sw: StatementWriter) = {
