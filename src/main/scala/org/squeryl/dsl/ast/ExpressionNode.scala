@@ -392,7 +392,7 @@ class PrefixOperatorNode
 
   override def children = List(child)
 
-  override def inhibited = child.inhibited
+  override def inhibited = _inhibitedByWhen || child.inhibited
 
   override def toString = 'PrefixOperatorNode + ":" + operatorToken + inhibitedFlagForAstDump
 
