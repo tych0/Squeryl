@@ -493,7 +493,7 @@ class OrderByExpression(a: OrderByArg) extends ExpressionNode {
 
   private def e = a.e
   
-  override def inhibited = e.inhibited
+  override def inhibited = _inhibitedByWhen || e.inhibited
 
   def doWrite(sw: StatementWriter) = {
     e.write(sw)
