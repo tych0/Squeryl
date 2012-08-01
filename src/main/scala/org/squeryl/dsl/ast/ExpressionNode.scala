@@ -288,7 +288,7 @@ class TokenExpressionNode(val token: String) extends ExpressionNode {
 }
 
 
-class InputOnlyConstantExpressionNode(v: Any) extends ConstantTypedExpression[Any,Any](v, NoOpOutMapper, v.asInstanceOf[AnyRef])
+private [squeryl] class InputOnlyConstantExpressionNode(v: Any) extends ConstantTypedExpression[Any,Any](v, NoOpOutMapper, v.asInstanceOf[AnyRef])
 
 class ConstantTypedExpression[A1,T1](val value: A1, override val mapper: OutMapper[A1], nativeJdbcValue: AnyRef) extends TypedExpression[A1,T1] {
 

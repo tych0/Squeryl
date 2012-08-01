@@ -111,13 +111,15 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
 //  def insert(t: Query[T]) = org.squeryl.internals.Utils.throwError("not implemented")
 
-  def insert(e: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
+  def insert[K](e: Iterable[T])(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] =
     _batchedUpdateOrInsert(e, t => posoMetaData.fieldsMetaData.filter(fmd => !fmd.isAutoIncremented && fmd.isInsertable), true, false)
 
   /**
    * isInsert if statement is insert otherwise update
    */
-  private def _batchedUpdateOrInsert(e: Iterable[T], fmdCallback: T => Iterable[FieldMetaData], isInsert: Boolean, checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] = {
+  private def _batchedUpdateOrInsert[K](
+       e: Iterable[T], fmdCallback: T => Iterable[FieldMetaData], isInsert: Boolean, checkOCC: Boolean)(
+      implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] = {
     
     val it = e.iterator
 
@@ -203,13 +205,13 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
   /**
    * Updates without any Optimistic Concurrency Control check 
    */
-  def forceUpdate(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T =
+  def forceUpdate[K](o: T)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, false)
   
-  def update(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T =
+  def update[K](o: T)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, true)
 
-  def updateModified(prev: T, o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+  def updateModified[K](prev: T, o: T)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T = {
     copyOccData(prev, o)
     _update(o, true, fmd => fmd.get(prev) != fmd.get(o))
   }
@@ -220,13 +222,15 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
       .foreach(fmd => fmd.set(o, fmd.get(prev)))
   }
 
-  def update(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
+  def update[K](o: Iterable[T])(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] =
     _update(o, true)
 
-  def forceUpdate(o: Iterable[T])(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] =
+  def forceUpdate[K](o: Iterable[T])(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] =
     _update(o, false)
 
-  private def _update(o: T, checkOCC: Boolean, fieldFilter: FieldMetaData => Boolean = fmd => true)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+  private def _update[K](
+      o: T, checkOCC: Boolean, fieldFilter: FieldMetaData => Boolean = fmd => true)(
+      implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T = {
 
     val dba = Session.currentSession.databaseAdapter
     val sw = new StatementWriter(dba)
@@ -270,7 +274,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     result
   }
 
-  private def _update(e: Iterable[T], checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): Iterable[T] = {
+  private def _update[K](e: Iterable[T], checkOCC: Boolean)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] = {
 
     def buildFmds(t: T): Iterable[FieldMetaData] = {
       val pkList = posoMetaData.primaryKey.getOrElse(
@@ -345,10 +349,10 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
   def deleteWhere(whereClause: T => LogicalBoolean)(implicit dsl: QueryDsl): Int =
     delete(dsl.from(this)(t => dsl.where(whereClause(t)).select(t)))      
 
-  def delete[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl): Boolean  = {
+  def delete[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Boolean  = {
     import dsl._
     val q = from(this)(a => dsl.where {
-      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(a.id, k)
+      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(a.id, k, toCanLookup(k))
     } select(a))
 
     lazy val z = q.headOption
@@ -367,9 +371,17 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     deleteCount == 1
   }
 
-  def insertOrUpdate(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+  def insertOrUpdate[K](o: T)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T = {
     if(o.isPersisted)
       update(o)
+    else
+      insert(o)
+    o
+  }
+
+  def assocUpdateOrInsert(o: T)(implicit ev: T <:< KeyedEntity[_], dsl: QueryDsl): T = {
+    if(o.isPersisted)
+      update[Nothing](o)(ev.asInstanceOf[<:<[T,org.squeryl.KeyedEntity[Nothing]]], dsl, _ => UnknownCanLookup)
     else
       insert(o)
     o
