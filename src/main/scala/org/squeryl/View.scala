@@ -141,7 +141,7 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
 
 }
 
-private [squeryl] sealed trait CanLookup
+sealed trait CanLookup
 
 private [squeryl] case object CompositeKeyLookup extends CanLookup
 
