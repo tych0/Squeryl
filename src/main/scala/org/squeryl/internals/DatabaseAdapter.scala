@@ -547,6 +547,9 @@ trait DatabaseAdapter {
             sw.write(quoteName(field.columnName))
             sw.write(" = ")
             sw.write(writeValue(o_, field, sw))
+//            if (field.columnName.equals("ctid")) {
+//              sw.write("::tid")
+//            }
           }
         )
       }
