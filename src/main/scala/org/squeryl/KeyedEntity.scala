@@ -86,7 +86,7 @@ trait PgOptimistic {
   self: KeyedEntity[_] =>
 
   protected [squeryl] val xmin: Int = 0
-  protected [squeryl] val ctid: String = ""
+  // protected val ctid: String = ""
 
   def copyOccData[T <: KeyedEntity[_] with PgOptimistic](target: T)(implicit table: Table[T]) {
     table.posoMetaData.fieldsMetaData filter (_.isPgOptimisticValue) foreach { fmd =>
