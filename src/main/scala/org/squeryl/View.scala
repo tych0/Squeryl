@@ -24,7 +24,7 @@ import java.sql.ResultSet
  * This class can be used for read only tables or (database) views
  * for an updatable view, or table use Table[T] 
  */
-class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Class[T], schema: Schema, _prefix: Option[String]) extends Queryable[T] {
+class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Class[T], schema: Schema, _prefix: Option[String], val ked: Option[KeyedEntityDef[T,_]]) extends Queryable[T] {
 
 
 //2.9.x approach for LyfeCycle events :
@@ -93,12 +93,12 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
     t
   }
 
-  def lookup[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Option[T] = {
+  def lookup[K](k: K)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): Option[T] = {
     //TODO: find out why scalac won't let dsl be passed to another method
     import dsl._
 
     val q = from(this)(a => dsl.where {
-      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(a.id, k, toCanLookup(k))
+      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(ked.getId(a), k, toCanLookup(k))
     } select(a))
 
     val it = q.iterator
@@ -113,12 +113,12 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
       None
   }
 
-  def refresh[K](t: T)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): Option[T] = {
+  def refresh[K](t: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): Option[T] = {
     //TODO: find out why scalac won't let dsl be passed to another method
     import dsl._
 
     val q = from(this)(a => dsl.where {
-      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(a.id, t.id, toCanLookup(t.id))
+      FieldReferenceLinker.createEqualityExpressionWithLastAccessedFieldReferenceAndConstant(ked.getId(a), ked.getId(t), toCanLookup(ked.getId(t)))
     } select(a))
 
     q.toList.headOption
@@ -127,7 +127,7 @@ class View[T] private [squeryl](_name: String, private[squeryl] val classOfT: Cl
   /**
    * Will throw an exception if the given key (k) returns no row.
    */
-  def get[K](k: K)(implicit ev: T <:< KeyedEntity[K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
+  def get[K](k: K)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     lookup(k).getOrElse(Utils.throwError("Found no row with key '"+ k + "' in " + name + "."))
 
 

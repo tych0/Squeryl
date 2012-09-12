@@ -8,7 +8,7 @@ import java.sql.{Savepoint}
 
 import org.squeryl.framework._
 
-trait SchoolDb2Object extends KeyedEntity[Long] {
+trait SchoolDb2Object {
   val id: Long = 0
 }
 
@@ -87,6 +87,12 @@ class ASTConstructionInterferenceB(val aId: Long) extends KeyedEntity[Long] {
 
 class SchoolDb2 extends Schema {
 
+  implicit object schoolDbObjectKED extends KeyedEntityDef[SchoolDb2Object,Long] {
+    def getId(a:SchoolDb2Object) = a.id
+    def isPersisted(a:SchoolDb2Object) = a.id > 0
+    def idPropertyName = "id"
+  }
+  
   val entries = table[Entry]
   val comments = table[Comment]("commentz")
 
@@ -223,7 +229,9 @@ abstract class SchoolDb2Tests extends SchemaTester with RunTestsInsideTransactio
     val seedData = seedDataDef
     import seedData._
 
-    val xiao = students.lookup(xiaoJimbao.id).get
+    val xiao = {students.lookup(xiaoJimbao.id)
+      
+    }.get
 
     val courseSubscription = xiao.courses.assign(chemistryCourse)
 
@@ -443,6 +451,41 @@ abstract class SchoolDb2Tests extends SchemaTester with RunTestsInsideTransactio
     val set = Set("foo", "bar", "baz").toSeq
     from(entries)(e => where(e.text.in(set))select(e)).toList
     passed('testInFromSeq)
+  }
+  
+  test("Inequality with query on right hand side", SingleTestRun) {
+    val seedData = seedDataDef
+    import seedData._
+   
+    val xiao = students.lookup(xiaoJimbao.id).get
+
+    val courseSubscription = xiao.courses.assign(chemistryCourse)
+
+    courseSubscriptions.insert(courseSubscription)
+    courseSubscription.grade = 95.0F
+    courseSubscriptions.update(courseSubscription)
+
+    val cs2 = courseSubscriptions.lookup(courseSubscription.id).get
+    
+    assertEquals(95.0F, cs2.grade, 'testUpdateWithCompositePK)
+    
+    val cs = from(courseSubscriptions)(p => compute(avg(p.grade)))
+   
+    val belowOrEqualToAvg = 
+      from(courseSubscriptions)(p =>
+        where(p.grade lte from(courseSubscriptions)(p => compute(avg(p.grade))))
+        select(p)
+      ).toList
+      
+    assert(belowOrEqualToAvg.size == 1)
+    
+    val belowAvg = 
+      from(courseSubscriptions)(p =>
+        where(p.grade lt from(courseSubscriptions)(p => compute(avg(p.grade))))
+        select(p)
+      ).toList
+      
+    assert(belowAvg.size == 0)    
   }
   
   test ("#73 relations with Option[] on one side of the equality expression blow up") {

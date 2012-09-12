@@ -34,14 +34,16 @@ import org.squeryl.dsl.ast.ExpressionNode
 
 object SingleTestRun extends org.scalatest.Tag("SingleTestRun")
 
-class SchoolDbObject extends KeyedEntity[Int] {
+class SchoolDbObject {
   var id: Int = 0
 }
 
 trait Person
 
 class Student(var name: String, var lastName: String, var age: Option[Int], var gender: Int, var addressId: Option[Int], var isMultilingual: Option[Boolean])
-  extends SchoolDbObject with Person {
+  extends Person {
+  
+  val id: Int = 0
 
   override def toString = "Student:" + id + ":" + name
   
@@ -50,12 +52,17 @@ class Student(var name: String, var lastName: String, var age: Option[Int], var 
   def dummyKey = compositeKey(age, addressId)
 }
 
+case class Course2(id: Int, name: String, confirmed: Boolean, occVersionNumber: Int)
+
 case class Course(var name: String, var startDate: Date, var finalExamDate: Option[Date],
   @Column("meaninglessLongZ")
   var meaninglessLong: Long,
   @Column("meaninglessLongOption")
-  var meaninglessLongOption: Option[Long], val confirmed: Boolean)
-  extends SchoolDbObject with Optimistic {
+  var meaninglessLongOption: Option[Long], val confirmed: Boolean) {
+  
+  val id: Int = 0
+  
+  val occVersionNumber: Int = 0
 
   def occVersionNumberZ = occVersionNumber
 
@@ -96,7 +103,7 @@ case class PostalCode(code: String) extends KeyedEntity[String] {
   def id = code
 }
 
-class School(val addressId: Int, val name: String, val parentSchoolId: Long) extends KeyedEntity[Long] {
+case class School(val addressId: Int, val name: String, val parentSchoolId: Long, val transientField: String) extends KeyedEntity[Long] {
   var id_field: Long = 0
 
   def id = id_field
@@ -116,6 +123,35 @@ class StringKeyedEntity(val id: String, val tempo: Tempo.Tempo) extends KeyedEnt
 }
 
 class SchoolDb extends Schema {
+
+  implicit object personKED extends KeyedEntityDef[Student,Int] {
+    def getId(a:Student) = a.id
+    def isPersisted(a:Student) = a.id > 0
+    def idPropertyName = "id"
+  }
+  
+  implicit object schoolDbObjectKED extends KeyedEntityDef[SchoolDbObject,Int] {
+    def getId(a:SchoolDbObject) = a.id
+    def isPersisted(a:SchoolDbObject) = a.id > 0
+    def idPropertyName = "id"
+  }
+  
+  
+  implicit object courseKED extends KeyedEntityDef[Course,Int] {
+    def getId(a:Course) = a.id
+    def isPersisted(a:Course) = a.id > 0
+    def idPropertyName = "id"
+    override def optimisticCounterPropertyName = Some("occVersionNumber")
+  }
+  
+  implicit object course2KED extends KeyedEntityDef[Course2,Int] {
+    def getId(a:Course2) = a.id
+    def isPersisted(a:Course2) = a.id > 0
+    def idPropertyName = "id"
+    override def optimisticCounterPropertyName = Some("occVersionNumber")
+  }
+  
+  val courses2 = table[Course2]
 
   import org.squeryl.PrimitiveTypeMode._
 
@@ -144,7 +180,7 @@ class SchoolDb extends Schema {
 
   val professors = table[Professor]
   
-  val students = table[Student]
+  val students = table[Student] //(implicitly[Manifest[Student]],personKEDO)
   
   val addresses = table[Address]("AddressexageratelyLongName")
 
@@ -184,6 +220,10 @@ class SchoolDb extends Schema {
     e.tempo.defaultsTo(Tempo.Largo)
   ))
 
+  on(schools)(s => declare(
+    s.transientField is transient
+  ))
+  
   // disable the override, since the above is good for Oracle only, this is not a usage demo, but
   // a necessary hack to test the dbType override mechanism and still allow the test suite can run on all database :
   override def columnTypeFor(fieldMetaData: FieldMetaData, owner: Table[_])  =
@@ -322,6 +362,9 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
   import org.squeryl.PrimitiveTypeMode._
   import schema._
 
+  
+  
+  
   test("StringKeyedEntities"){
     val testInstance = sharedTestInstance; import testInstance._
     val se = stringKeyedEntities.insert(new StringKeyedEntity("123", Tempo.Largo))
@@ -469,6 +512,19 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     passed('testInOpWithStringList)
   }
   
+  test("transient annotation", SingleTestRun) {
+    
+
+    val s = schools.insert(new School(123,"EB123",0, "transient !"))
+    
+    val s2 = schools.lookup(s.id).get
+    
+    assert(s.id == s2.id)
+    
+    assert(s2.transientField != "transient !")
+    
+  }
+  
   test("lifecycleCallbacks") {
 
 
@@ -482,11 +538,11 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     val s1 = students.insert(new Student("z1", "z2", Some(4), 1, Some(4), Some(true)))
 
     assert(beforeInsertsOfPerson.exists(_ == s1))
-    assert(beforeInsertsOfKeyedEntity.exists(_ == s1))
+    assert(! beforeInsertsOfKeyedEntity.exists(_ == s1))
     assert(!beforeInsertsOfProfessor.exists(_ == s1))
     assert(!afterInsertsOfProfessor.exists(_ == s1))
 
-    val s2 = schools.insert(new School(0,"EB",0))
+    val s2 = schools.insert(new School(0,"EB",0, ""))
 
     assert(!beforeInsertsOfPerson.exists(_ == s2))
     assert(beforeInsertsOfKeyedEntity.exists(_ == s2))
@@ -574,7 +630,35 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     validateQuery('testLikeOperator, q, identity[Int], List(gaitan.id,georgi.id,gontran.id))
     
   }
-  
+
+  test("SingleOption"){
+    val testInstance = sharedTestInstance; import testInstance._
+    val q =
+      from(students)(s=>
+        where(s.name like "G%")
+        select(s.id)
+        orderBy(s.name)
+      )
+      
+    val shouldBeRight =
+      try {
+        Left(q.singleOption)
+      }
+      catch {
+        case e: Exception => Right(e)
+      }
+
+    assert(shouldBeRight.isRight, "singleOption did not throw an exception when it should have") 
+
+    val q2 =
+      from(students)(s=>
+        where(s.name like "Gontran")
+        select(s.id)
+        orderBy(s.name)
+      )
+    
+    q2.singleOption should equal(Some(gontran.id))
+  }  
     
   test("isNull and === None comparison"){  
     val z1 =
@@ -923,7 +1007,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
 
 
-  test("PartialUpdate1", SingleTestRun) {
+  test("PartialUpdate1") {
     val testInstance = sharedTestInstance; import testInstance._
 
     val initialHT = courses.where(c => c.id === heatTransfer.id).single
@@ -1098,7 +1182,10 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
   }
 
   test("BatchUpdate1") {
+    
     val testInstance = sharedTestInstance; import testInstance._
+    import schema._
+        
     addresses.insert(List(
       new Address("St-Dominique",14, None,None,None),
       new Address("St-Urbain",23, None,None,None),
@@ -1126,6 +1213,29 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     assertEquals(0, updatedQ.Count : Long, "batched update test failed")
 
     passed('testBatchUpdate1)
+  }
+  
+  test("BatchUpdateAndInsert2") {
+    
+    val testInstance = sharedTestInstance; import testInstance._
+    import schema._
+    
+    
+    courses2.insert(
+        Seq(Course2(0, "Programming 101", false, 0),
+            Course2(0, "Programming 102", false, 0)))
+    
+    val c = courses2.where(_.name like "Programming %")
+    val c0 = c.toList
+    
+    assert(c0.size == 2)
+    assert(c0.filter(_.confirmed).size == 0)
+
+    courses2.update(c0.map(_.copy(confirmed = true)))
+    
+    assert(c.filter(_.confirmed).size == 2)
+    
+    passed('BatchUpdateAndInsert2)
   }
 
   test("BigDecimal") {

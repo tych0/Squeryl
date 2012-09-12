@@ -54,13 +54,38 @@ trait Query[R] extends Queryable[R] {
 
   def intersect(q: Query[R]): Query[R]
 
+  /**
+   * Returns Some(singleRow), None if there are none, throws an exception 
+   * if the query returns more than one row.
+   */
+  def singleOption: Option[R] = {
+    val i = iterator
+    val res = 
+      if(i.hasNext)
+        Some(i.next)
+      else 
+        None
+
+    if(i.hasNext)
+      org.squeryl.internals.Utils.throwError("singleOption called on query returning more than one row : \n" + statement)
+    res
+  }
+
+  def headOption = {
+    val i = iterator
+    if(i.hasNext)
+      Some(i.next)
+    else
+      None
+  }
+
+  def distinct: Query[R]
+
   def intersectAll(q: Query[R]): Query[R]
 
   def except(q: Query[R]): Query[R]
 
   def exceptAll(q: Query[R]): Query[R]
-
-  def distinct: Query[R]
 
   def forUpdate: Query[R]
 

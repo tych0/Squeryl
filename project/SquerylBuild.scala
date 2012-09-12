@@ -23,15 +23,18 @@ object SquerylBuild extends Build {
     		  		v 
     		  	else {	
     		  		val suffix = Option(System.getProperty("suffix"))
-    		  		var i = v.indexOf('-')
-    		  		if(i < 0) i = v.length
+    		  		val i = (v.indexOf('-'), v.length) match {
+    		  		  case (x, l) if x < 0 => l
+    		  		  case (x, l) if v substring (x+1) matches """\d+""" => l //patch level, not RCx
+    		  		  case (x, _) => x
+    		  		}
     		  		v.substring(0,i) + "-" + (suffix getOrElse "SNAPSHOT")
     		  	}
   			  },
     		  parallelExecution := false,
     		  publishMavenStyle := true,
-  			  scalaVersion := "2.9.1",
-  			  crossScalaVersions := Seq("2.9.2", "2.9.1", "2.9.0-1", "2.9.0", "2.8.1", "2.8.0"),
+  			  scalaVersion := "2.9.2",
+  			  crossScalaVersions := Seq("2.9.2", "2.9.1", "2.9.0"),
   			  licenses := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
   			  homepage := Some(url("http://squeryl.org")),
 			  pomExtra := (<scm>

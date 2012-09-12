@@ -17,6 +17,35 @@ package org.squeryl
 
 import annotations.Transient
 
+@scala.annotation.implicitNotFound(msg = "The method requires an implicit org.squeryl.KeyedEntityDef[${A}, ${K}] in scope, or that it extends the trait KeyedEntity[{K}]")
+trait KeyedEntityDef[-A,K] extends OptionalKeyedEntityDef[A,K]{
+  
+  def getId(a: A): K
+  /**
+   * returns true if the given instance has been persisted
+   */
+  def isPersisted(a: A):  Boolean
+  /**
+   * the (Scala) property/field name of the id 
+   */
+  def idPropertyName: String
+  /**
+   * the counter field name for OCC, None to disable OCC (optimistic concurrency control)
+   */
+  def optimisticCounterPropertyName: Option[String] = None
+  
+  private [squeryl] def isOptimistic = optimisticCounterPropertyName.isDefined
+  
+  /**
+   * fulfills the contract of OptionalKeyedEntityDef
+   */
+  final def keyedEntityDef = Some(this)
+}
+
+trait OptionalKeyedEntityDef[-A,K] {
+  def keyedEntityDef: Option[KeyedEntityDef[A,K]]
+}
+
 /**
  *  For use with View[A] or Table[A], when A extends KeyedEntity[K],
  * lookup and delete by key become implicitly available

@@ -382,7 +382,7 @@ trait DatabaseAdapter {
     }
   }
 
-  def executeUpdateForInsert[T](s: Session, sw: StatementWriter, ps: PreparedStatement): Boolean = exec(s, sw) { params =>
+  def executeUpdateForInsert(s: Session, sw: StatementWriter, ps: PreparedStatement) = exec(s, sw) { params =>
     if(s.isLoggingEnabled)
       s.log(sw.toString)
     fillParamsInto(params, ps)

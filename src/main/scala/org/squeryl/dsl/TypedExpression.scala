@@ -122,6 +122,16 @@ trait TypedExpression[A1,T1] extends ExpressionNode {
   def gte[A2,T2](b: TypedExpression[A2,T2])(implicit ev: CanCompare[T1, T2]) = new BinaryOperatorNodeLogicalBoolean(this, b, ">=")
   def lte[A2,T2](b: TypedExpression[A2,T2])(implicit ev: CanCompare[T1, T2]) = new BinaryOperatorNodeLogicalBoolean(this, b, "<=")
   
+  def gt [A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = new BinaryOperatorNodeLogicalBoolean(this, q.copy(false, Nil).ast, ">")
+  def gte[A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = new BinaryOperatorNodeLogicalBoolean(this, q.copy(false, Nil).ast, ">=")
+  def lt [A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = new BinaryOperatorNodeLogicalBoolean(this, q.copy(false, Nil).ast, "<")
+  def lte[A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = new BinaryOperatorNodeLogicalBoolean(this, q.copy(false, Nil).ast, "<=")
+  
+  def > [A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = gt(q)
+  def >=[A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = gte(q)
+  def < [A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = lt(q)
+  def <=[A2,T2](q: Query[A2])(implicit cc: CanCompare[T1,T2]): LogicalBoolean = lte(q)
+
   def >[A2,T2](b: TypedExpression[A2,T2])(implicit ev: CanCompare[T1, T2]) = gt(b)
   def <[A2,T2](b: TypedExpression[A2,T2])(implicit ev: CanCompare[T1, T2]) = lt(b)
   def >=[A2,T2](b: TypedExpression[A2,T2])(implicit ev: CanCompare[T1, T2]) = gte(b)
@@ -245,7 +255,7 @@ trait PrimitiveJdbcMapper[A] extends JdbcMapper[A,A] {
   def extractNativeJdbcValue(rs: ResultSet, i: Int): A
   def convertFromJdbc(v: A) = v
   def convertToJdbc(v: A) = v
-  def nativeJdbcType = sample.getClass
+  def nativeJdbcType = sample.asInstanceOf[AnyRef].getClass
 }
 
 abstract class NonPrimitiveJdbcMapper[P,A,T](val primitiveMapper: PrimitiveJdbcMapper[P], val fieldMapper: FieldMapper) extends JdbcMapper[P,A] with TypedExpressionFactory[A,T] {
