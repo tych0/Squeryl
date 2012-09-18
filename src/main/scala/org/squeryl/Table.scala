@@ -216,16 +216,16 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
   /**
    * Updates without any Optimistic Concurrency Control check 
    */
-  def forceUpdate[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup) =
+  def forceUpdate[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, false)
   
-  def update[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup):Unit =
+  def update[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, true)
 
-  def update[K](o: Iterable[T])(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup):Unit =
+  def update[K](o: Iterable[T])(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] =
     _update(o, ked.isOptimistic)
 
-  def forceUpdate[K](o: Iterable[T])(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup):Unit =
+  def forceUpdate[K](o: Iterable[T])(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): Iterable[T] =
     _update(o, ked.isOptimistic)
 
   private def _update[K](
