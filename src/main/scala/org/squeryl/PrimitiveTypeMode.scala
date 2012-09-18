@@ -98,6 +98,9 @@ trait PrimitiveTypeMode extends QueryDsl with FieldMapper {
   implicit def bigDecimalToTE(f: BigDecimal) = bigDecimalTEF.create(f)
   implicit def optionBigDecimalToTE(f: Option[BigDecimal]) = optionBigDecimalTEF.create(f)
 
+  implicit def logicalBooleanToTE(l: LogicalBoolean) =
+    PrimitiveTypeSupport.booleanTEF.convert(l)
+
   implicit def queryStringToTE(q: Query[String]) =
     new QueryValueExpressionNode[String, TString](q.copy(false, Nil).ast, stringTEF.createOutMapper)
   implicit def queryOptionStringToTE(q: Query[Option[String]]) =
