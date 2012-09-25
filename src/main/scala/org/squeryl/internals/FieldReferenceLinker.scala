@@ -25,21 +25,23 @@ import org.squeryl.{UnknownCanLookup, CompositeKeyLookup, SimpleKeyLookup, CanLo
 
 object FieldReferenceLinker {
 
-  def pushExpressionOrCollectValue[T](e: ()=>TypedExpression[T,_]): T = {
+  def pushExpressionOrCollectValue[T](isChildOfRoot: Boolean, e: ()=>TypedExpression[T,_]): Option[T] = {
     if (isYieldInspectionMode) {
       val yi = _yieldInspectionTL.get
       val expr = yi.callWithoutReentrance(e)
       yi.addSelectElement(new ValueSelectElement(expr, yi.resultSetMapper, expr.mapper, yi.queryExpressionNode))
       val r = expr.sample
-      r
+      Some(r)
     }
-    else {
+    else if(isChildOfRoot) {
       val r = _yieldValues.get.remove(0).asInstanceOf[T]
       if (_yieldValues.get.size == 0) {
         _yieldValues.remove()
       }
-      r
+      Some(r)
     }
+    else
+      None
   }
 
   def pushYieldValue(v:AnyRef) = {

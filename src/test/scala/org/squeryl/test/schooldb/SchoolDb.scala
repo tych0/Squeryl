@@ -1589,6 +1589,19 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     assert(expected == is, "expected :\n " + expected + "\ngot : \n " + is)
   }
+
+  test("CountLiftedThings") {
+    val testInstance = sharedTestInstance; import testInstance._
+    val expected:Long = from(students)(s => compute(count))
+    val is:Long = from(from(students)(s => select(&(1))))(s =>
+      compute(count)
+    ).headOption.map(_.measures).getOrElse(-1L)
+
+    assert(expected == is, "expected :\n " + expected + "\ngot : \n " + is)
+    println("expected :\n " + expected + "\ngot : \n " + is)
+    assert(false, "hello world")
+    passed('testCountLiftedThings)
+  }
 }
 
 object Issue14Schema extends Schema{

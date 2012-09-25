@@ -200,10 +200,19 @@ trait QueryDsl
   def where(b: =>LogicalBoolean): WhereState[Conditioned] =
     new QueryElementsImpl[Conditioned](Some(b _))
 
-  def &[A,T](i: =>TypedExpression[A,T]): A =
-    FieldReferenceLinker.pushExpressionOrCollectValue[A](i _)
-    
-  
+  def &[A,T](i: =>TypedExpression[A,T], read: Boolean = true): A = {
+    def isChildOfRoot(e: ExpressionNode): Boolean = {
+      e.parent map { p =>
+        if(p.isInstanceOf[QueryExpressionNode[_]])
+          p.asInstanceOf[QueryExpressionNode[_]].isRoot
+        else
+          isChildOfRoot(p)
+      } getOrElse true
+    }
+
+    FieldReferenceLinker.pushExpressionOrCollectValue[A](read, i _) getOrElse i.sample
+  }
+
   implicit def typedExpression2OrderByArg[E <% TypedExpression[_,_]](e: E) = new OrderByArg(e)
 
   implicit def orderByArg2OrderByExpression(a: OrderByArg) = new OrderByExpression(a)

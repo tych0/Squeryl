@@ -25,6 +25,8 @@ class QueryExpressionNode[R](_query: AbstractQuery[R],
   extends QueryExpressionElements
     with QueryableExpressionNode {
 
+  def isRoot: Boolean = _query.isRoot
+
   def tableExpressions: Iterable[QueryableExpressionNode] = 
     List(views.filter(v => ! v.inhibited),
          subQueries.filter(v => ! v.inhibited)).flatten
