@@ -204,7 +204,12 @@ class Schema(implicit val fieldMapper: FieldMapper) {
   private def _writeIndexDeclarationIfApplicable(columnAttributes: Seq[ColumnAttribute], cols: Seq[FieldMetaData], name: Option[String]): Option[String] = {
 
     val unique = columnAttributes.find(_.isInstanceOf[Unique])
-    val indexed = columnAttributes.find(_.isInstanceOf[Indexed])
+    val indexed = columnAttributes.find(_.isInstanceOf[Indexed]).flatMap{ i => 
+      i match {
+        case idx: Indexed => Some(idx)
+        case _ => None
+      }
+    }
   
     (unique, indexed) match {
       case (None,    None)                   => None
@@ -243,7 +248,7 @@ class Schema(implicit val fieldMapper: FieldMapper) {
       s.execute(statement)
     }
     catch {
-      case e:SQLException => throw new RuntimeException("error executing " + statement + "\n" + e, e)
+      case e:SQLException => throw SquerylSQLException("error executing " + statement + "\n" + e, e)
     }
     finally {
       s.close

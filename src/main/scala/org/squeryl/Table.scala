@@ -33,6 +33,10 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
   private def hasDbManagedFields: Boolean =
     _dbAdapter.supportsReturningClause && posoMetaData.dbManagedFields.headOption.isDefined
 
+  /**
+   * @throws SquerylSQLException When a database error occurs or the insert
+   * does not result in 1 row
+   */
   def insert(t: T): T = StackMarker.lastSquerylStackFrame {
 
     val o = _callbacks.beforeInsert(t.asInstanceOf[AnyRef])
@@ -79,7 +83,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
       //if (cnt != 1)
       if (cnt != 1 && ! hasDbManagedFields) // Work around PG JDBC bug
-        org.squeryl.internals.Utils.throwError("failed to insert")
+        throw SquerylSQLException("failed to insert.  Expected 1 row, got " + cnt)
 
       posoMetaData.primaryKey match {
         case Some(Left(pk:FieldMetaData)) => if(pk.isAutoIncremented) {
@@ -194,9 +198,11 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
             r.asInstanceOf[AnyRef]
           } else
             a
-        if(isInsert)
-          _callbacks.afterInsert(a0).asInstanceOf[T]
-        else
+        if(isInsert) {
+          val r = _callbacks.afterInsert(a0).asInstanceOf[T]
+          _setPersisted(r)
+          r
+        } else
           _callbacks.afterUpdate(a0).asInstanceOf[T]
       }
     } else Nil
@@ -215,10 +221,16 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
 
   /**
    * Updates without any Optimistic Concurrency Control check 
+   * @throws SquerylSQLException When a database error occurs or the update
+   * does not result in 1 row
    */
   def forceUpdate[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, false)
   
+  /**
+   * @throws SquerylSQLException When a database error occurs or the update
+   * does not result in 1 row
+   */
   def update[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T =
     _update(o, true)
 
@@ -255,7 +267,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
                 ") has become stale, it cannot be updated under optimistic concurrency control")
           }
           else
-            org.squeryl.internals.Utils.throwError("failed to update")
+            throw SquerylSQLException("failed to update.  Expected 1 row, got " + cnt)
         }
 
         // Can't use RETURNING here due to PG JDBC bug (no update counts with RETURNING)
@@ -371,6 +383,10 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     deleteCount == 1
   }
 
+  /**
+   * @throws SquerylSQLException When a database error occurs or the operation
+   * does not result in 1 row
+   */
   def insertOrUpdate[K](o: T)(implicit ked: KeyedEntityDef[T,K], dsl: QueryDsl, toCanLookup: K => CanLookup): T = {
     if(ked.isPersisted(o))
       update(o)

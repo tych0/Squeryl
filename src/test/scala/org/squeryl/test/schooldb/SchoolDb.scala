@@ -109,6 +109,10 @@ case class School(val addressId: Int, val name: String, val parentSchoolId: Long
   def id = id_field
 }
 
+case class YieldInspectionTest(id:Int, num:Int)
+
+case class YieldInspectionAnother(id:Int, name:String, testId:Int)
+
 object SDB extends SchoolDb
 
 object Tempo extends Enumeration {
@@ -193,6 +197,10 @@ class SchoolDb extends Schema {
   val schools = table[School]
 
   val postalCodes = table[PostalCode]
+
+  
+  val tests = table[YieldInspectionTest]
+  val others = table[YieldInspectionAnother]
   
 // uncomment to test : when http://www.assembla.com/spaces/squeryl/tickets/14-assertion-fails-on-self-referring-onetomanyrelationship
 //  an unverted constraint gets created, unless expr. is inverted : child.parentSchoolId === parent.id
@@ -512,7 +520,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
     passed('testInOpWithStringList)
   }
   
-  test("transient annotation", SingleTestRun) {
+  test("transient annotation") {
     
 
     val s = schools.insert(new School(123,"EB123",0, "transient !"))
@@ -1257,7 +1265,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     val babaZula2 = professors.where(_.weightInBD === Some(261.123456111: BigDecimal))
 
-    assertEquals(261.123456111, babaZula2.single.weightInBD.get, 'testBigDecimal)
+    assertEquals(BigDecimal(261.123456111), babaZula2.single.weightInBD.get, 'testBigDecimal)
 
     update(professors)(p=>
       where(p.id === babaZula.id)
@@ -1275,7 +1283,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     val babaZula4 = professors.where(_.weightInBD === Some(532.2469122224: BigDecimal))
 
-    assertEquals(532.2469122224, babaZula4.single.weightInBD.get, 'testBigDecimal)
+    assertEquals(BigDecimal(532.2469122224), babaZula4.single.weightInBD.get, 'testBigDecimal)
     assertEquals(1, babaZula4.Count : Long, 'testBigDecimal)
 
     update(professors)(p=>
@@ -1285,7 +1293,7 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     val babaZula5 = professors.where(_.yearlySalaryBD === 170)
 
-    assertEquals(170, babaZula5.single.yearlySalaryBD, 'testBigDecimal)
+    assertEquals(BigDecimal(170), babaZula5.single.yearlySalaryBD, 'testBigDecimal)
     assertEquals(1, babaZula5.Count : Long, 'testBigDecimal)
   }
 
@@ -1504,6 +1512,20 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
     passed('testNewOuterJoin3 )
   }
+  
+/*
+  test("TestYieldInspectionLeakViaCGLIB", SingleTestRun) {
+      tests.insert(List(YieldInspectionTest(1, 100), YieldInspectionTest(1,500), YieldInspectionTest(2,600)))
+      others.insert(List(YieldInspectionAnother(1, "One", 1), YieldInspectionAnother(2, "Two", 2)))
+
+      val group = from(tests)(t=> groupBy(t.id) compute(sum(t.num)))
+
+      val testQuery = join(group, others)((g, o)=>
+        select(g.measures.get, o)
+        on(g.key === o.testId)
+        ).toList
+  }
+*/
 
   test("Exists")  {
     val testInstance = sharedTestInstance; import testInstance._
@@ -1580,6 +1602,30 @@ abstract class SchoolDbTestRun extends SchoolDbTestBase {
 
   }
 
+  test("selectFromExists"){
+    val testInstance = sharedTestInstance; import testInstance._
+    val qStudents = from(students) ((s) => select(s))
+    val studentsWithAnAddress =
+      from(qStudents)(s =>
+        where(exists(from(addresses)((a) =>
+          where(s.addressId === a.id) select(a))))
+          select(s)
+      )
+    val qAStudentIfHeHasAnAddress =
+      from(studentsWithAnAddress)(s =>
+        where(s.name === "Xiao")
+        select(s)
+      )
+
+    val res = for (s <- qAStudentIfHeHasAnAddress) yield s.name
+    val expected = List("Xiao")
+
+    assert(expected == res, "expected :\n " + expected + "\ngot : \n " + res)
+
+    passed('selectFromExists)
+
+  }
+  
   test("UpdateSetAll") {
     val testInstance = sharedTestInstance; import testInstance._
     update(students)(s => setAll(s.age := Some(30)))
