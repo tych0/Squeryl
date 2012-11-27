@@ -120,7 +120,7 @@ object SquerylSQLException {
     new SquerylSQLException(message, None)
 }
 
-class SquerylSQLException(message: String, cause: Option[SQLException]) extends RuntimeException(message, cause.orNull) {
+class SquerylSQLException(val message: String, val cause: Option[SQLException]) extends RuntimeException(message, cause.orNull) {
   // Overridden to provide covariant return type as a convenience
   override def getCause = cause.orNull
 }
