@@ -42,7 +42,7 @@ class Table[T] private [squeryl] (n: String, c: Class[T], val schema: Schema, _p
     val o = _callbacks.beforeInsert(t.asInstanceOf[AnyRef])
     val sess = Session.currentSession
     val sw = new StatementWriter(_dbAdapter)
-    _dbAdapter.writeInsert(t, this, sw)
+    _dbAdapter.writeInsert(o.asInstanceOf[T], this, sw)
     _dbAdapter.writeReturningClause(this, sw)
 
     val st =
