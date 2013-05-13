@@ -569,9 +569,7 @@ trait DatabaseAdapter {
           field => {
             sw.write(" and ")
             sw.write(quoteName(field.columnName))
-            if (field.columnName == "ctid") {
-              sw.write("::varchar")
-            }
+            field.explicitDbTypeDeclaration.foreach(t => sw.write("::" + t))
             sw.write(" = ")
             sw.write(writeValue(o_, field, sw))
           }

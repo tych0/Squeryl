@@ -145,7 +145,9 @@ class FieldMetaData(
    */
   def explicitDbTypeDeclaration: Option[String] = {
     val dbt = _columnAttributes.find(_.isInstanceOf[DBType])
-    if(dbt == None)
+    if(columnName == "ctid")
+      Some("varchar")
+    else if(dbt == None)
       None
     else
       Some(dbt.get.asInstanceOf[DBType].declaration)

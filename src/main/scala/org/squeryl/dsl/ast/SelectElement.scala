@@ -176,10 +176,7 @@ class FieldSelectElement
     
     def doWrite(sw: StatementWriter) = {
       sw.write(sw.quoteName(alias))
-      if (classOf[PgOptimistic].isAssignableFrom(origin.view.classOfT)
-          && fieldMetaData.columnName == "ctid") {
-        sw.write("::varchar")
-      }
+      fieldMetaData.explicitDbTypeDeclaration.foreach(t => sw.write("::" + t))
     }
   }
 
