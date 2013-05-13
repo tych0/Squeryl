@@ -16,7 +16,7 @@ object SquerylBuild extends Build {
     settings = Project.defaultSettings /* ++ lsSettings */ ++ Seq(
       description := "A Scala ORM and DSL for talking with Databases using minimum verbosity and maximum type safety",
       organization := "gov.wicourts.org.squeryl",
-      version := "0.9.6-ccap01",
+      version := "0.9.6-ccap02",
       javacOptions := Seq("-source", "1.6", "-target", "1.6"),
     /*
 	  version <<= version { v => //only release *if* -Drelease=true is passed to JVM
@@ -66,7 +66,7 @@ object SquerylBuild extends Build {
             Resolvers.ccapReleases
           Some(repo)
       },
-      credentials += Credentials(Path.userHome / ".ccap_artifactory_credentials"),
+      credentials += Credentials(Path.userHome / ".ivy2" / ".credentials"),
       publishArtifact in Test := false,
       pomIncludeRepository := { _ => false },
       //below is for lsync, run "ls-write-version", commit to github, then run "lsync" 
