@@ -152,7 +152,10 @@ class FieldMetaData(
     else
       Some(dbt.get.asInstanceOf[DBType].declaration)
   }
-  
+
+  def cast_? : Boolean = explicitDbTypeDeclaration.isDefined
+  def pgCast: String = explicitDbTypeDeclaration.map("::" + _).getOrElse("")
+
   def isTransient =
     _columnAttributes.exists(_.isInstanceOf[IsTransient])
 

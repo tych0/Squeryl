@@ -533,8 +533,10 @@ trait DatabaseAdapter {
         fmds.map(fmd => {
               if(fmd.isOptimisticCounter)
                 quoteName(fmd.columnName) + " = " + quoteName(fmd.columnName) + " + 1 "
-              else
-                quoteName(fmd.columnName) + " = " + writeValue(o_, fmd, sw)
+              else {
+                val fmt = if(fmd.cast_?) "(%%s)%s".format(fmd.pgCast) else "%s"
+                quoteName(fmd.columnName) + " = " + fmt.format(writeValue(o_, fmd, sw))
+              }
             }),
         ","
       )
@@ -569,7 +571,7 @@ trait DatabaseAdapter {
           field => {
             sw.write(" and ")
             sw.write(quoteName(field.columnName))
-            field.explicitDbTypeDeclaration.foreach(t => sw.write("::" + t))
+            sw.write(field.pgCast)
             sw.write(" = ")
             sw.write(writeValue(o_, field, sw))
           }
@@ -626,9 +628,11 @@ trait DatabaseAdapter {
       sw.write(quoteName(col.columnName))
       sw.write(" = ")
       val v = z.element
-      sw.write("(")
+      if(col.cast_?)
+        sw.write("(")
       v.write(sw)
-      sw.write(")")
+      if(col.cast_?)
+        sw.write(")" + col.pgCast)
       if(!z.isLast) {
         sw.write(",")
         sw.nextLine
