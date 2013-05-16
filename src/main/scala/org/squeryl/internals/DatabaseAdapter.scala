@@ -425,8 +425,11 @@ trait DatabaseAdapter {
     sw.write(" (");
     sw.write(f.map(fmd => quoteName(fmd.columnName)).mkString(", "));
     sw.write(") values ");
-    sw.write(
-      f.map(fmd => writeValue(o_, fmd, sw)
+    sw.write((
+      f.map { fmd =>
+        val fmt = if(fmd.cast_?) "(%%s)%s".format(fmd.pgCast) else "%s"
+        fmt.format(writeValue(o_, fmd, sw))
+      }
     ).mkString("(",",",")"));
   }
 
